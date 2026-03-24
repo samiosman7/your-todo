@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowPlan</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Newsreader:opsz,wght@6..72,500;6..72,700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Todo + Scheduler</p>
+          <h1>Plan the week without losing track of today.</h1>
+          <p class="hero-copy">
+            Add tasks, drag them into today, reorder them anytime, and keep
+            recurring items lined up for the rest of the week.
+          </p>
+        </div>
+        <div class="current-focus" id="current-focus-card">
+          <p class="card-label">Currently doing:</p>
+          <h2 id="current-focus-title">Nothing checked yet</h2>
+          <p id="current-focus-meta">
+            Check “Currently doing” on any task in Today to pin it here.
+          </p>
+        </div>
+      </header>
+
+      <main class="dashboard">
+        <section class="panel composer">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Create</p>
+              <h2>Add a task</h2>
+            </div>
+          </div>
+
+          <form id="task-form" class="task-form">
+            <label>
+              Task name
+              <input
+                id="task-title"
+                name="title"
+                type="text"
+                maxlength="90"
+                placeholder="Finish math homework"
+                required
+              />
+            </label>
+
+            <label>
+              Notes
+              <textarea
+                id="task-notes"
+                name="notes"
+                rows="3"
+                maxlength="240"
+                placeholder="Optional details, links, reminders..."
+              ></textarea>
+            </label>
+
+            <div class="field-grid">
+              <label>
+                Category
+                <input
+                  id="task-category"
+                  name="category"
+                  type="text"
+                  maxlength="40"
+                  placeholder="School, Work, Personal"
+                />
+              </label>
+
+              <label>
+                Add it to
+                <select id="task-target" name="target">
+                  <option value="inbox">Inbox</option>
+                  <option value="today">Today</option>
+                </select>
+              </label>
+            </div>
+
+            <fieldset class="repeat-group">
+              <legend>Repeat this for the week</legend>
+              <p class="helper">
+                Pick the days you want this to keep showing up.
+              </p>
+              <div class="weekday-pills" id="weekday-pills"></div>
+            </fieldset>
+
+            <button type="submit" class="primary-button">Add task</button>
+          </form>
+        </section>
+
+        <section class="panel stack-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Inbox</p>
+              <h2>Unschedule first, sort later</h2>
+            </div>
+            <span class="count-pill" id="inbox-count">0 tasks</span>
+          </div>
+          <div class="drop-hint">Drag a task into Today when you want to work on it.</div>
+          <div id="inbox-list" class="task-list"></div>
+        </section>
+
+        <section class="panel today-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Today</p>
+              <h2>Drag to reorder your focus</h2>
+            </div>
+            <span class="count-pill" id="today-count">0 planned</span>
+          </div>
+          <div id="today-list" class="task-list today-list"></div>
+        </section>
+
+        <section class="panel week-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Recurring</p>
+              <h2>Rest of this week</h2>
+            </div>
+          </div>
+          <div id="week-grid" class="week-grid"></div>
+        </section>
+      </main>
+    </div>
+
+    <template id="task-card-template">
+      <article class="task-card" draggable="true">
+        <div class="task-topline">
+          <span class="task-category"></span>
+          <button type="button" class="ghost-button delete-button">Delete</button>
+        </div>
+        <h3 class="task-title"></h3>
+        <p class="task-notes"></p>
+        <div class="task-actions">
+          <label class="check-chip">
+            <input type="checkbox" class="doing-checkbox" />
+            <span>Currently doing</span>
+          </label>
+          <label class="check-chip">
+            <input type="checkbox" class="done-checkbox" />
+            <span>Done</span>
+          </label>
+          <button type="button" class="ghost-button move-button"></button>
+        </div>
+      </article>
+    </template>
+
+    <script src="script.js"></script>
+  </body>
+</html>
