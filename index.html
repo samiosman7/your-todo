@@ -3,53 +3,56 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FlowPlan</title>
+    <title>FlowPlan Calendar</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Newsreader:opsz,wght@6..72,500;6..72,700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="page-shell">
-      <header class="hero">
-        <div>
-          <p class="eyebrow">Todo + Scheduler</p>
-          <h1>Plan the week without losing track of today.</h1>
-          <p class="hero-copy">
-            Add tasks, drag them into today, reorder them anytime, and keep
-            recurring items lined up for the rest of the week.
-          </p>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand-block">
+          <p class="eyebrow">FlowPlan</p>
+          <h1>Week</h1>
+          <p class="subtle" id="sidebar-range">This week</p>
         </div>
-        <div class="current-focus" id="current-focus-card">
-          <p class="card-label">Currently doing:</p>
-          <h2 id="current-focus-title">Nothing checked yet</h2>
-          <p id="current-focus-meta">
-            Check “Currently doing” on any task in Today to pin it here.
-          </p>
-        </div>
-      </header>
 
-      <main class="dashboard">
-        <section class="panel composer">
-          <div class="panel-heading">
+        <section class="sidebar-card">
+          <div class="card-header">
             <div>
-              <p class="eyebrow">Create</p>
-              <h2>Add a task</h2>
+              <p class="eyebrow">Focus</p>
+              <h2>Currently doing</h2>
+            </div>
+          </div>
+          <div class="focus-panel">
+            <strong id="current-focus-title">Nothing checked yet</strong>
+            <p id="current-focus-meta">
+              Mark any calendar block as your current focus.
+            </p>
+          </div>
+        </section>
+
+        <section class="sidebar-card">
+          <div class="card-header">
+            <div>
+              <p class="eyebrow">Quick Add</p>
+              <h2>Schedule a block</h2>
             </div>
           </div>
 
-          <form id="task-form" class="task-form">
+          <form id="planner-form" class="planner-form">
             <label>
-              Task name
+              Title
               <input
-                id="task-title"
+                id="entry-title"
                 name="title"
                 type="text"
                 maxlength="90"
-                placeholder="Finish math homework"
+                placeholder="Homework, gym, call..."
                 required
               />
             </label>
@@ -57,100 +60,87 @@
             <label>
               Notes
               <textarea
-                id="task-notes"
+                id="entry-notes"
                 name="notes"
                 rows="3"
-                maxlength="240"
-                placeholder="Optional details, links, reminders..."
+                maxlength="220"
+                placeholder="Optional"
               ></textarea>
             </label>
 
             <div class="field-grid">
               <label>
-                Category
-                <input
-                  id="task-category"
-                  name="category"
-                  type="text"
-                  maxlength="40"
-                  placeholder="School, Work, Personal"
-                />
+                Day
+                <select id="entry-day" name="day"></select>
               </label>
-
               <label>
-                Add it to
-                <select id="task-target" name="target">
-                  <option value="inbox">Inbox</option>
-                  <option value="today">Today</option>
-                </select>
+                Hour
+                <select id="entry-hour" name="hour"></select>
               </label>
             </div>
 
             <fieldset class="repeat-group">
-              <legend>Repeat this for the week</legend>
-              <p class="helper">
-                Pick the days you want this to keep showing up.
-              </p>
-              <div class="weekday-pills" id="weekday-pills"></div>
+              <legend>Repeat this week</legend>
+              <div id="weekday-pills" class="weekday-pills"></div>
             </fieldset>
 
-            <button type="submit" class="primary-button">Add task</button>
+            <button type="submit" class="primary-button">Add Block</button>
           </form>
         </section>
+      </aside>
 
-        <section class="panel stack-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">Inbox</p>
-              <h2>Unschedule first, sort later</h2>
-            </div>
-            <span class="count-pill" id="inbox-count">0 tasks</span>
+      <main class="calendar-app">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Planner</p>
+            <h2 id="week-label">This week</h2>
           </div>
-          <div class="drop-hint">Drag a task into Today when you want to work on it.</div>
-          <div id="inbox-list" class="task-list"></div>
-        </section>
 
-        <section class="panel today-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">Today</p>
-              <h2>Drag to reorder your focus</h2>
-            </div>
-            <span class="count-pill" id="today-count">0 planned</span>
+          <div class="topbar-actions">
+            <button type="button" class="ghost-button" id="prev-week">Previous</button>
+            <button type="button" class="ghost-button" id="today-week">Today</button>
+            <button type="button" class="ghost-button" id="next-week">Next</button>
           </div>
-          <div id="today-list" class="task-list today-list"></div>
-        </section>
+        </header>
 
-        <section class="panel week-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="eyebrow">Recurring</p>
-              <h2>Rest of this week</h2>
+        <section class="calendar-panel">
+          <div class="calendar-shell">
+            <div class="calendar-header" id="calendar-header"></div>
+            <div class="calendar-body">
+              <div class="time-column" id="time-column"></div>
+              <div class="week-grid" id="week-grid"></div>
             </div>
           </div>
-          <div id="week-grid" class="week-grid"></div>
         </section>
       </main>
     </div>
 
-    <template id="task-card-template">
-      <article class="task-card" draggable="true">
-        <div class="task-topline">
-          <span class="task-category"></span>
-          <button type="button" class="ghost-button delete-button">Delete</button>
+    <template id="event-card-template">
+      <article class="event-card">
+        <div class="event-meta">
+          <span class="event-hour"></span>
+          <div class="event-status">
+            <span class="status-dot current-dot"></span>
+            <span class="status-dot done-dot"></span>
+          </div>
         </div>
-        <h3 class="task-title"></h3>
-        <p class="task-notes"></p>
-        <div class="task-actions">
-          <label class="check-chip">
-            <input type="checkbox" class="doing-checkbox" />
-            <span>Currently doing</span>
+        <input class="event-title" type="text" maxlength="90" placeholder="Add what you're doing" />
+        <textarea
+          class="event-notes"
+          rows="2"
+          maxlength="220"
+          placeholder="Details"
+        ></textarea>
+        <div class="event-actions">
+          <label class="toggle-chip">
+            <input type="checkbox" class="doing-toggle" />
+            <span>Doing</span>
           </label>
-          <label class="check-chip">
-            <input type="checkbox" class="done-checkbox" />
+          <label class="toggle-chip">
+            <input type="checkbox" class="done-toggle" />
             <span>Done</span>
           </label>
-          <button type="button" class="ghost-button move-button"></button>
+          <button type="button" class="ghost-button compact clear-button">Clear</button>
         </div>
       </article>
     </template>

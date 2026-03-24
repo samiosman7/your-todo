@@ -1,403 +1,443 @@
-const STORAGE_KEY = "flowplan-state-v1";
+const STORAGE_KEY = "flowplan-hourly-calendar-v2";
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-const defaultState = {
-  tasks: [],
-  recurring: [],
-};
+const longFormatter = new Intl.DateTimeFormat(undefined, {
+  month: "long",
+  day: "numeric",
+});
+const shortFormatter = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+});
 
 const state = loadState();
+const today = startOfDay(new Date());
 
-const taskForm = document.getElementById("task-form");
-const titleInput = document.getElementById("task-title");
-const notesInput = document.getElementById("task-notes");
-const categoryInput = document.getElementById("task-category");
-const targetInput = document.getElementById("task-target");
+const plannerForm = document.getElementById("planner-form");
+const entryTitle = document.getElementById("entry-title");
+const entryNotes = document.getElementById("entry-notes");
+const entryDay = document.getElementById("entry-day");
+const entryHour = document.getElementById("entry-hour");
 const weekdayPills = document.getElementById("weekday-pills");
-const inboxList = document.getElementById("inbox-list");
-const todayList = document.getElementById("today-list");
-const inboxCount = document.getElementById("inbox-count");
-const todayCount = document.getElementById("today-count");
-const weekGrid = document.getElementById("week-grid");
+const weekLabel = document.getElementById("week-label");
+const sidebarRange = document.getElementById("sidebar-range");
 const currentFocusTitle = document.getElementById("current-focus-title");
 const currentFocusMeta = document.getElementById("current-focus-meta");
-const template = document.getElementById("task-card-template");
+const calendarHeader = document.getElementById("calendar-header");
+const timeColumn = document.getElementById("time-column");
+const weekGrid = document.getElementById("week-grid");
+const prevWeekButton = document.getElementById("prev-week");
+const todayWeekButton = document.getElementById("today-week");
+const nextWeekButton = document.getElementById("next-week");
+const eventCardTemplate = document.getElementById("event-card-template");
 
-let dragTaskId = null;
+let didAutoScroll = false;
 
-buildWeekdaySelector();
+buildHourOptions();
 bindEvents();
-seedStarterTasks();
+seedStarterEntries();
 render();
 
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      return cloneDefaultState();
+      return { weekOffset: 0, entries: {} };
     }
 
     const parsed = JSON.parse(raw);
     return {
-      tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
-      recurring: Array.isArray(parsed.recurring) ? parsed.recurring : [],
+      weekOffset: Number.isInteger(parsed.weekOffset) ? parsed.weekOffset : 0,
+      entries: parsed.entries && typeof parsed.entries === "object" ? parsed.entries : {},
     };
   } catch {
-    return cloneDefaultState();
+    return { weekOffset: 0, entries: {} };
   }
-}
-
-function cloneDefaultState() {
-  return JSON.parse(JSON.stringify(defaultState));
 }
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-function seedStarterTasks() {
-  if (state.tasks.length || state.recurring.length) {
-    return;
-  }
-
-  state.tasks.push(
-    createTask({
-      title: "Brain dump everything for this week",
-      notes: "Start in the inbox, then drag the most important items into Today.",
-      category: "Setup",
-      lane: "inbox",
-    }),
-    createTask({
-      title: "Pick the top 3 things to finish today",
-      notes: "You can drag this above or below anything in your Today list.",
-      category: "Focus",
-      lane: "today",
-    })
-  );
-
-  state.recurring.push({
-    id: crypto.randomUUID(),
-    title: "Daily review",
-    notes: "Check what is done, move unfinished work, and reset tomorrow.",
-    category: "Routine",
-    days: [1, 2, 3, 4, 5],
-  });
-
-  saveState();
-}
-
-function buildWeekdaySelector() {
-  weekdayLabels.forEach((label, dayIndex) => {
-    const wrapper = document.createElement("label");
-    wrapper.className = "weekday-pill";
-
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.value = String(dayIndex);
-
-    const text = document.createElement("span");
-    text.textContent = label;
-
-    wrapper.append(checkbox, text);
-    weekdayPills.appendChild(wrapper);
-  });
-}
-
 function bindEvents() {
-  taskForm.addEventListener("submit", handleTaskSubmit);
-
-  todayList.addEventListener("dragover", handleTodayDragOver);
-  todayList.addEventListener("drop", handleTodayDrop);
-
-  inboxList.addEventListener("dragover", (event) => event.preventDefault());
-  inboxList.addEventListener("drop", handleInboxDrop);
+  plannerForm.addEventListener("submit", handlePlannerSubmit);
+  prevWeekButton.addEventListener("click", () => shiftWeek(-1));
+  nextWeekButton.addEventListener("click", () => shiftWeek(1));
+  todayWeekButton.addEventListener("click", () => {
+    state.weekOffset = 0;
+    didAutoScroll = false;
+    render();
+  });
 }
 
-function handleTaskSubmit(event) {
-  event.preventDefault();
+function buildHourOptions() {
+  entryHour.innerHTML = "";
+  for (let hour = 0; hour < 24; hour += 1) {
+    const option = document.createElement("option");
+    option.value = String(hour);
+    option.textContent = formatHour(hour);
+    if (hour === new Date().getHours()) {
+      option.selected = true;
+    }
+    entryHour.appendChild(option);
+  }
+}
 
-  const title = titleInput.value.trim();
-  const notes = notesInput.value.trim();
-  const category = categoryInput.value.trim();
-  const lane = targetInput.value;
-  const selectedDays = getSelectedDays();
-
-  if (!title) {
+function seedStarterEntries() {
+  if (Object.keys(state.entries).length > 0) {
     return;
   }
 
-  state.tasks.unshift(
-    createTask({
-      title,
-      notes,
-      category,
-      lane,
-    })
-  );
+  const todayKey = formatDateKey(today);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const tomorrowKey = formatDateKey(tomorrow);
 
-  if (selectedDays.length) {
-    state.recurring.unshift({
-      id: crypto.randomUUID(),
-      title,
-      notes,
-      category,
-      days: selectedDays,
-    });
-  }
-
-  taskForm.reset();
-  saveState();
-  render();
-}
-
-function getSelectedDays() {
-  return [...weekdayPills.querySelectorAll("input:checked")].map((input) =>
-    Number(input.value)
-  );
-}
-
-function createTask({ title, notes, category, lane }) {
-  return {
-    id: crypto.randomUUID(),
-    title,
-    notes,
-    category,
-    lane,
+  setEntry(todayKey, 9, {
+    title: "Plan the day",
+    notes: "Set the 2 or 3 things that matter most.",
     doing: false,
     done: false,
-  };
+  });
+
+  setEntry(todayKey, 13, {
+    title: "Focused work",
+    notes: "Keep this block protected.",
+    doing: false,
+    done: false,
+  });
+
+  setEntry(tomorrowKey, 19, {
+    title: "Reset for tomorrow",
+    notes: "Review and prep the next day.",
+    doing: false,
+    done: false,
+  });
+
+  saveState();
 }
 
 function render() {
-  renderTasks();
+  const weekDates = getVisibleWeekDates();
+  buildWeekdayControls(weekDates);
+  renderWeekLabels(weekDates);
+  renderHeader(weekDates);
+  renderTimeColumn();
+  renderGrid(weekDates);
   renderCurrentFocus();
-  renderRecurringWeek();
   saveState();
+  autoScrollToCurrentHour();
 }
 
-function renderTasks() {
-  const inboxTasks = state.tasks.filter((task) => task.lane === "inbox");
-  const todayTasks = state.tasks.filter((task) => task.lane === "today");
+function buildWeekdayControls(weekDates) {
+  entryDay.innerHTML = "";
+  weekdayPills.innerHTML = "";
 
-  renderLane(inboxList, inboxTasks, "Drop tasks here to keep them in the inbox.");
-  renderLane(todayList, todayTasks, "Your Today lane is empty. Drag a task here.");
+  weekDates.forEach((date) => {
+    const dateKey = formatDateKey(date);
 
-  inboxCount.textContent = `${inboxTasks.length} task${inboxTasks.length === 1 ? "" : "s"}`;
-  todayCount.textContent = `${todayTasks.length} planned`;
-}
-
-function renderLane(container, tasks, emptyMessage) {
-  container.innerHTML = "";
-
-  if (!tasks.length) {
-    const empty = document.createElement("div");
-    empty.className = "empty-state";
-    empty.textContent = emptyMessage;
-    container.appendChild(empty);
-    return;
-  }
-
-  tasks.forEach((task) => {
-    const fragment = template.content.cloneNode(true);
-    const card = fragment.querySelector(".task-card");
-    const category = fragment.querySelector(".task-category");
-    const title = fragment.querySelector(".task-title");
-    const notes = fragment.querySelector(".task-notes");
-    const doingCheckbox = fragment.querySelector(".doing-checkbox");
-    const doneCheckbox = fragment.querySelector(".done-checkbox");
-    const moveButton = fragment.querySelector(".move-button");
-    const deleteButton = fragment.querySelector(".delete-button");
-    const doingLabel = fragment.querySelector(".check-chip");
-
-    card.dataset.taskId = task.id;
-    card.classList.toggle("doing", task.doing);
-    card.classList.toggle("done", task.done);
-
-    category.textContent = task.category || "General";
-    title.textContent = task.title;
-    notes.textContent = task.notes || "No extra notes";
-    doingCheckbox.checked = task.doing;
-    doneCheckbox.checked = task.done;
-    doingCheckbox.disabled = task.lane !== "today";
-    doingLabel.title = task.lane === "today" ? "Mark as your current focus" : "Move this task to Today before starting it";
-
-    moveButton.textContent =
-      task.lane === "today" ? "Send to inbox" : "Send to today";
-
-    card.addEventListener("dragstart", () => {
-      dragTaskId = task.id;
-      card.classList.add("dragging");
-    });
-
-    card.addEventListener("dragend", () => {
-      card.classList.remove("dragging");
-      dragTaskId = null;
-    });
-
-    doingCheckbox.addEventListener("change", () => setDoingTask(task.id, doingCheckbox.checked));
-    doneCheckbox.addEventListener("change", () => toggleDone(task.id, doneCheckbox.checked));
-    moveButton.addEventListener("click", () => moveTask(task.id, task.lane === "today" ? "inbox" : "today"));
-    deleteButton.addEventListener("click", () => deleteTask(task.id));
-
-    container.appendChild(fragment);
-  });
-}
-
-function setDoingTask(taskId, isDoing) {
-  state.tasks.forEach((task) => {
-    task.doing = isDoing ? task.id === taskId : false;
-  });
-
-  render();
-}
-
-function toggleDone(taskId, isDone) {
-  const task = state.tasks.find((entry) => entry.id === taskId);
-  if (!task) {
-    return;
-  }
-
-  task.done = isDone;
-  if (isDone) {
-    task.doing = false;
-  }
-
-  render();
-}
-
-function moveTask(taskId, lane) {
-  const task = state.tasks.find((entry) => entry.id === taskId);
-  if (!task) {
-    return;
-  }
-
-  task.lane = lane;
-  if (lane !== "today") {
-    task.doing = false;
-  }
-
-  render();
-}
-
-function deleteTask(taskId) {
-  const index = state.tasks.findIndex((task) => task.id === taskId);
-  if (index === -1) {
-    return;
-  }
-
-  state.tasks.splice(index, 1);
-  render();
-}
-
-function handleInboxDrop(event) {
-  event.preventDefault();
-  if (!dragTaskId) {
-    return;
-  }
-
-  moveTask(dragTaskId, "inbox");
-}
-
-function handleTodayDrop(event) {
-  event.preventDefault();
-  if (!dragTaskId) {
-    return;
-  }
-
-  const targetCard = event.target.closest(".task-card");
-  const draggedTask = state.tasks.find((task) => task.id === dragTaskId);
-  if (!draggedTask) {
-    return;
-  }
-
-  draggedTask.lane = "today";
-
-  const todayTasks = state.tasks.filter((task) => task.lane === "today" && task.id !== dragTaskId);
-  const otherTasks = state.tasks.filter((task) => task.lane !== "today");
-
-  if (!targetCard) {
-    todayTasks.push(draggedTask);
-  } else {
-    const targetId = targetCard.dataset.taskId;
-    const insertIndex = todayTasks.findIndex((task) => task.id === targetId);
-    if (insertIndex === -1) {
-      todayTasks.push(draggedTask);
-    } else {
-      todayTasks.splice(insertIndex, 0, draggedTask);
+    const option = document.createElement("option");
+    option.value = dateKey;
+    option.textContent = `${weekdayLabels[date.getDay()]} ${shortFormatter.format(date)}`;
+    if (isSameDate(date, today)) {
+      option.selected = true;
     }
+    entryDay.appendChild(option);
+
+    const label = document.createElement("label");
+    label.className = "weekday-pill";
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.value = dateKey;
+    if (isSameDate(date, today)) {
+      input.checked = true;
+    }
+
+    const text = document.createElement("span");
+    text.textContent = weekdayLabels[date.getDay()];
+
+    label.append(input, text);
+    weekdayPills.appendChild(label);
+  });
+}
+
+function renderWeekLabels(weekDates) {
+  const label = `${longFormatter.format(weekDates[0])} - ${longFormatter.format(weekDates[6])}`;
+  weekLabel.textContent = label;
+  sidebarRange.textContent = label;
+}
+
+function renderHeader(weekDates) {
+  calendarHeader.innerHTML = '<div class="time-header"></div>';
+
+  weekDates.forEach((date) => {
+    const item = document.createElement("div");
+    item.className = "day-header-cell";
+    if (isSameDate(date, today)) {
+      item.classList.add("is-today");
+    }
+
+    item.innerHTML = `<span>${weekdayLabels[date.getDay()]}</span><strong>${date.getDate()}</strong>`;
+    calendarHeader.appendChild(item);
+  });
+}
+
+function renderTimeColumn() {
+  timeColumn.innerHTML = "";
+  for (let hour = 0; hour < 24; hour += 1) {
+    const label = document.createElement("div");
+    label.className = "time-slot";
+    label.textContent = formatHour(hour);
+    timeColumn.appendChild(label);
   }
-
-  state.tasks = [...otherTasks, ...todayTasks];
-  render();
 }
 
-function handleTodayDragOver(event) {
-  event.preventDefault();
-}
-
-function renderCurrentFocus() {
-  const currentTask = state.tasks.find((task) => task.doing);
-  if (!currentTask) {
-    currentFocusTitle.textContent = "Nothing checked yet";
-    currentFocusMeta.textContent = "Check “Currently doing” on any task in Today to pin it here.";
-    return;
-  }
-
-  currentFocusTitle.textContent = currentTask.title;
-  currentFocusMeta.textContent = currentTask.notes || `${currentTask.category || "General"} task in your Today lane.`;
-}
-
-function renderRecurringWeek() {
+function renderGrid(weekDates) {
   weekGrid.innerHTML = "";
 
-  const today = new Date();
-  const days = getCurrentWeek(today);
-
-  days.forEach((date) => {
-    const dayIndex = date.getDay();
-    const items = state.recurring.filter((item) => item.days.includes(dayIndex));
-    const column = document.createElement("section");
+  weekDates.forEach((date) => {
+    const column = document.createElement("div");
     column.className = "day-column";
-    if (isSameDate(today, date)) {
+    if (isSameDate(date, today)) {
       column.classList.add("is-today");
     }
 
-    const header = document.createElement("div");
-    header.className = "day-header";
-    header.innerHTML = `<strong>${weekdayLabels[dayIndex]}</strong><span>${date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-    })}</span>`;
-    column.appendChild(header);
+    const dateKey = formatDateKey(date);
 
-    if (!items.length) {
-      const empty = document.createElement("div");
-      empty.className = "empty-state";
-      empty.textContent = "Nothing repeating here yet.";
-      column.appendChild(empty);
-    } else {
-      items.forEach((item) => {
-        const card = document.createElement("div");
-        card.className = "repeat-chip";
-        card.innerHTML = `<strong>${item.title}</strong><p>${item.notes || item.category || "Recurring item"}</p>`;
-        column.appendChild(card);
+    for (let hour = 0; hour < 24; hour += 1) {
+      const cell = document.createElement("div");
+      cell.className = "calendar-cell";
+      if (isCurrentHour(date, hour)) {
+        cell.classList.add("is-now");
+      }
+
+      const entry = getEntry(dateKey, hour);
+      const fragment = eventCardTemplate.content.cloneNode(true);
+      const card = fragment.querySelector(".event-card");
+      const hourText = fragment.querySelector(".event-hour");
+      const titleInput = fragment.querySelector(".event-title");
+      const notesInput = fragment.querySelector(".event-notes");
+      const doingToggle = fragment.querySelector(".doing-toggle");
+      const doneToggle = fragment.querySelector(".done-toggle");
+      const clearButton = fragment.querySelector(".clear-button");
+
+      hourText.textContent = formatHour(hour);
+      titleInput.value = entry?.title || "";
+      notesInput.value = entry?.notes || "";
+      doingToggle.checked = Boolean(entry?.doing);
+      doneToggle.checked = Boolean(entry?.done);
+
+      card.classList.toggle("filled", Boolean(entry?.title || entry?.notes));
+      card.classList.toggle("doing", Boolean(entry?.doing));
+      card.classList.toggle("done", Boolean(entry?.done));
+
+      titleInput.addEventListener("change", () => {
+        upsertEntry(dateKey, hour, {
+          title: titleInput.value.trim(),
+          notes: notesInput.value.trim(),
+        });
       });
+
+      notesInput.addEventListener("change", () => {
+        upsertEntry(dateKey, hour, {
+          title: titleInput.value.trim(),
+          notes: notesInput.value.trim(),
+        });
+      });
+
+      doingToggle.addEventListener("change", () => {
+        setDoingEntry(dateKey, hour, doingToggle.checked);
+      });
+
+      doneToggle.addEventListener("change", () => {
+        toggleDoneEntry(dateKey, hour, doneToggle.checked);
+      });
+
+      clearButton.addEventListener("click", () => {
+        clearEntry(dateKey, hour);
+      });
+
+      cell.appendChild(fragment);
+      column.appendChild(cell);
     }
 
     weekGrid.appendChild(column);
   });
 }
 
-function getCurrentWeek(baseDate) {
-  const sunday = new Date(baseDate);
-  sunday.setHours(0, 0, 0, 0);
-  sunday.setDate(baseDate.getDate() - baseDate.getDay());
+function renderCurrentFocus() {
+  const current = findDoingEntry();
+  if (!current) {
+    currentFocusTitle.textContent = "Nothing checked yet";
+    currentFocusMeta.textContent = "Mark any calendar block as your current focus.";
+    return;
+  }
+
+  const day = parseDateKey(current.dateKey);
+  currentFocusTitle.textContent = current.entry.title || "Untitled block";
+  currentFocusMeta.textContent = `${weekdayLabels[day.getDay()]} ${shortFormatter.format(day)} at ${formatHour(
+    current.hour
+  )}${current.entry.notes ? ` • ${current.entry.notes}` : ""}`;
+}
+
+function handlePlannerSubmit(event) {
+  event.preventDefault();
+
+  const title = entryTitle.value.trim();
+  const notes = entryNotes.value.trim();
+  const hour = Number(entryHour.value);
+  const selectedDays = [...weekdayPills.querySelectorAll("input:checked")].map((input) => input.value);
+  const targetDays = selectedDays.length ? selectedDays : [entryDay.value];
+
+  if (!title || Number.isNaN(hour)) {
+    return;
+  }
+
+  targetDays.forEach((dateKey) => {
+    const existing = getEntry(dateKey, hour);
+    setEntry(dateKey, hour, {
+      title,
+      notes,
+      doing: existing?.doing || false,
+      done: existing?.done || false,
+    });
+  });
+
+  plannerForm.reset();
+  entryHour.value = String(new Date().getHours());
+  render();
+}
+
+function shiftWeek(delta) {
+  state.weekOffset += delta;
+  didAutoScroll = false;
+  render();
+}
+
+function upsertEntry(dateKey, hour, partial) {
+  const existing = getEntry(dateKey, hour) || {
+    title: "",
+    notes: "",
+    doing: false,
+    done: false,
+  };
+
+  const next = { ...existing, ...partial };
+
+  if (!next.title && !next.notes && !next.doing && !next.done) {
+    deleteEntry(dateKey, hour);
+  } else {
+    setEntry(dateKey, hour, next);
+  }
+
+  render();
+}
+
+function setDoingEntry(dateKey, hour, isDoing) {
+  Object.keys(state.entries).forEach((storedDateKey) => {
+    Object.keys(state.entries[storedDateKey]).forEach((storedHour) => {
+      state.entries[storedDateKey][storedHour].doing =
+        isDoing && storedDateKey === dateKey && Number(storedHour) === hour;
+    });
+  });
+
+  if (isDoing && !getEntry(dateKey, hour)) {
+    setEntry(dateKey, hour, {
+      title: "",
+      notes: "",
+      doing: true,
+      done: false,
+    });
+  }
+
+  render();
+}
+
+function toggleDoneEntry(dateKey, hour, isDone) {
+  const existing = getEntry(dateKey, hour) || {
+    title: "",
+    notes: "",
+    doing: false,
+    done: false,
+  };
+
+  setEntry(dateKey, hour, {
+    ...existing,
+    done: isDone,
+    doing: isDone ? false : existing.doing,
+  });
+
+  render();
+}
+
+function clearEntry(dateKey, hour) {
+  deleteEntry(dateKey, hour);
+  render();
+}
+
+function getVisibleWeekDates() {
+  const base = startOfWeek(today);
+  const start = new Date(base);
+  start.setDate(base.getDate() + state.weekOffset * 7);
 
   return Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(sunday);
-    date.setDate(sunday.getDate() + index);
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
     return date;
   });
+}
+
+function findDoingEntry() {
+  for (const [dateKey, hours] of Object.entries(state.entries)) {
+    for (const [hourKey, entry] of Object.entries(hours)) {
+      if (entry.doing) {
+        return { dateKey, hour: Number(hourKey), entry };
+      }
+    }
+  }
+  return null;
+}
+
+function autoScrollToCurrentHour() {
+  if (didAutoScroll || state.weekOffset !== 0) {
+    return;
+  }
+
+  const currentCell = weekGrid.querySelector(".calendar-cell.is-now");
+  if (currentCell) {
+    currentCell.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    didAutoScroll = true;
+  }
+}
+
+function formatHour(hour) {
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const normalized = hour % 12 === 0 ? 12 : hour % 12;
+  return `${normalized}:00 ${suffix}`;
+}
+
+function formatDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateKey(dateKey) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function startOfDay(date) {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function startOfWeek(date) {
+  const copy = startOfDay(date);
+  copy.setDate(copy.getDate() - copy.getDay());
+  return copy;
 }
 
 function isSameDate(a, b) {
@@ -406,4 +446,31 @@ function isSameDate(a, b) {
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
   );
+}
+
+function isCurrentHour(date, hour) {
+  const now = new Date();
+  return isSameDate(date, now) && hour === now.getHours();
+}
+
+function getEntry(dateKey, hour) {
+  return state.entries[dateKey]?.[hour] || null;
+}
+
+function setEntry(dateKey, hour, entry) {
+  if (!state.entries[dateKey]) {
+    state.entries[dateKey] = {};
+  }
+  state.entries[dateKey][hour] = entry;
+}
+
+function deleteEntry(dateKey, hour) {
+  if (!state.entries[dateKey]) {
+    return;
+  }
+
+  delete state.entries[dateKey][hour];
+  if (Object.keys(state.entries[dateKey]).length === 0) {
+    delete state.entries[dateKey];
+  }
 }
