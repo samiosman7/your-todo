@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FlowPlan Calendar</title>
+    <title>FlowPlan</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -15,134 +15,180 @@
   <body>
     <div class="app-shell">
       <aside class="sidebar">
-        <div class="brand-block">
+        <div class="brand-card">
           <p class="eyebrow">FlowPlan</p>
-          <h1>Week</h1>
-          <p class="subtle" id="sidebar-range">This week</p>
+          <h1 id="main-heading">Today</h1>
+          <p class="subtle" id="range-label">Loading...</p>
         </div>
 
         <section class="sidebar-card">
-          <div class="card-header">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Views</p>
+              <h2>Calendar mode</h2>
+            </div>
+          </div>
+          <div class="view-switcher" id="view-switcher">
+            <button type="button" class="switch-button" data-view="day">Day</button>
+            <button type="button" class="switch-button" data-view="week">Week</button>
+            <button type="button" class="switch-button" data-view="month">Month</button>
+          </div>
+          <div class="nav-buttons">
+            <button type="button" class="ghost-button" id="prev-button">Previous</button>
+            <button type="button" class="ghost-button" id="today-button">Today</button>
+            <button type="button" class="ghost-button" id="next-button">Next</button>
+          </div>
+        </section>
+
+        <section class="sidebar-card">
+          <div class="section-heading">
             <div>
               <p class="eyebrow">Focus</p>
               <h2>Currently doing</h2>
             </div>
           </div>
-          <div class="focus-panel">
+          <div class="focus-card">
             <strong id="current-focus-title">Nothing checked yet</strong>
             <p id="current-focus-meta">
-              Mark any calendar block as your current focus.
+              Mark an event as your current focus and it will show up here.
             </p>
           </div>
         </section>
 
-        <section class="sidebar-card">
-          <div class="card-header">
+        <section class="sidebar-card" id="quick-add-panel">
+          <div class="section-heading">
             <div>
               <p class="eyebrow">Quick Add</p>
-              <h2>Schedule a block</h2>
+              <h2>Add one event</h2>
             </div>
           </div>
-
-          <form id="planner-form" class="planner-form">
+          <form id="single-add-form" class="form-stack">
             <label>
               Title
-              <input
-                id="entry-title"
-                name="title"
-                type="text"
-                maxlength="90"
-                placeholder="Homework, gym, call..."
-                required
-              />
+              <input id="single-title" name="title" type="text" maxlength="90" placeholder="Study biology" required />
             </label>
-
             <label>
               Notes
-              <textarea
-                id="entry-notes"
-                name="notes"
-                rows="3"
-                maxlength="220"
-                placeholder="Optional"
-              ></textarea>
+              <textarea id="single-notes" name="notes" rows="3" maxlength="220" placeholder="Optional"></textarea>
             </label>
-
-            <div class="field-grid">
+            <div class="form-grid">
               <label>
                 Day
-                <select id="entry-day" name="day"></select>
+                <select id="single-date" name="date"></select>
               </label>
               <label>
-                Hour
-                <select id="entry-hour" name="hour"></select>
+                Start
+                <select id="single-hour" name="hour"></select>
               </label>
             </div>
-
-            <fieldset class="repeat-group">
-              <legend>Repeat this week</legend>
-              <div id="weekday-pills" class="weekday-pills"></div>
-            </fieldset>
-
-            <button type="submit" class="primary-button">Add Block</button>
+            <label>
+              Duration
+              <select id="single-duration" name="duration"></select>
+            </label>
+            <button type="submit" class="primary-button">Add Event</button>
           </form>
+        </section>
+
+        <section class="sidebar-card" id="bulk-add-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Week View</p>
+              <h2>Mass add events</h2>
+            </div>
+          </div>
+          <form id="bulk-add-form" class="form-stack">
+            <label>
+              Title
+              <input id="bulk-title" name="title" type="text" maxlength="90" placeholder="Practice piano" />
+            </label>
+            <label>
+              Notes
+              <textarea id="bulk-notes" name="notes" rows="3" maxlength="220" placeholder="Optional"></textarea>
+            </label>
+            <div class="form-grid">
+              <label>
+                Start
+                <select id="bulk-hour" name="hour"></select>
+              </label>
+              <label>
+                Duration
+                <select id="bulk-duration" name="duration"></select>
+              </label>
+            </div>
+            <fieldset class="day-picker">
+              <legend>Apply to these days</legend>
+              <div id="bulk-day-pills" class="pill-row"></div>
+            </fieldset>
+            <button type="submit" class="primary-button">Mass Add</button>
+          </form>
+        </section>
+
+        <section class="sidebar-card" id="event-editor-panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Selected Event</p>
+              <h2>Edit details</h2>
+            </div>
+          </div>
+          <form id="editor-form" class="form-stack hidden">
+            <label>
+              Title
+              <input id="editor-title" name="title" type="text" maxlength="90" />
+            </label>
+            <label>
+              Notes
+              <textarea id="editor-notes" name="notes" rows="3" maxlength="220"></textarea>
+            </label>
+            <div class="form-grid">
+              <label>
+                Start
+                <select id="editor-hour" name="hour"></select>
+              </label>
+              <label>
+                Duration
+                <select id="editor-duration" name="duration"></select>
+              </label>
+            </div>
+            <label class="toggle-row">
+              <input id="editor-doing" type="checkbox" />
+              <span>Currently doing</span>
+            </label>
+            <label class="toggle-row">
+              <input id="editor-done" type="checkbox" />
+              <span>Done</span>
+            </label>
+            <div class="editor-actions">
+              <button type="submit" class="primary-button">Save</button>
+              <button type="button" class="ghost-button" id="delete-event-button">Delete</button>
+            </div>
+          </form>
+          <p id="editor-empty" class="subtle">Select an event from the calendar to edit it.</p>
         </section>
       </aside>
 
-      <main class="calendar-app">
+      <main class="calendar-main">
         <header class="topbar">
           <div>
             <p class="eyebrow">Planner</p>
-            <h2 id="week-label">This week</h2>
+            <h2 id="view-title">Day view</h2>
           </div>
-
-          <div class="topbar-actions">
-            <button type="button" class="ghost-button" id="prev-week">Previous</button>
-            <button type="button" class="ghost-button" id="today-week">Today</button>
-            <button type="button" class="ghost-button" id="next-week">Next</button>
-          </div>
+          <button type="button" class="ghost-button" id="jump-to-day-button">Open selected day</button>
         </header>
 
         <section class="calendar-panel">
-          <div class="calendar-shell">
-            <div class="calendar-header" id="calendar-header"></div>
-            <div class="calendar-body">
-              <div class="time-column" id="time-column"></div>
-              <div class="week-grid" id="week-grid"></div>
-            </div>
-          </div>
+          <div id="day-view" class="view-panel"></div>
+          <div id="week-view" class="view-panel hidden"></div>
+          <div id="month-view" class="view-panel hidden"></div>
         </section>
       </main>
     </div>
 
-    <template id="event-card-template">
-      <article class="event-card">
-        <div class="event-meta">
-          <span class="event-hour"></span>
-          <div class="event-status">
-            <span class="status-dot current-dot"></span>
-            <span class="status-dot done-dot"></span>
-          </div>
-        </div>
-        <input class="event-title" type="text" maxlength="90" placeholder="Add what you're doing" />
-        <textarea
-          class="event-notes"
-          rows="2"
-          maxlength="220"
-          placeholder="Details"
-        ></textarea>
-        <div class="event-actions">
-          <label class="toggle-chip">
-            <input type="checkbox" class="doing-toggle" />
-            <span>Doing</span>
-          </label>
-          <label class="toggle-chip">
-            <input type="checkbox" class="done-toggle" />
-            <span>Done</span>
-          </label>
-          <button type="button" class="ghost-button compact clear-button">Clear</button>
-        </div>
-      </article>
+    <template id="event-chip-template">
+      <button type="button" class="event-chip">
+        <span class="event-chip-time"></span>
+        <strong class="event-chip-title"></strong>
+        <span class="event-chip-notes"></span>
+      </button>
     </template>
 
     <script src="script.js"></script>

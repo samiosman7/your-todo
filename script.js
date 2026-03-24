@@ -1,57 +1,91 @@
-const STORAGE_KEY = "flowplan-hourly-calendar-v2";
+const STORAGE_KEY = "flowplan-calendar-v3";
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const longFormatter = new Intl.DateTimeFormat(undefined, {
-  month: "long",
-  day: "numeric",
-});
-const shortFormatter = new Intl.DateTimeFormat(undefined, {
+const monthShortFormatter = new Intl.DateTimeFormat(undefined, {
   month: "short",
   day: "numeric",
 });
+const monthLongFormatter = new Intl.DateTimeFormat(undefined, {
+  month: "long",
+  day: "numeric",
+});
 
-const state = loadState();
 const today = startOfDay(new Date());
+const state = loadState();
 
-const plannerForm = document.getElementById("planner-form");
-const entryTitle = document.getElementById("entry-title");
-const entryNotes = document.getElementById("entry-notes");
-const entryDay = document.getElementById("entry-day");
-const entryHour = document.getElementById("entry-hour");
-const weekdayPills = document.getElementById("weekday-pills");
-const weekLabel = document.getElementById("week-label");
-const sidebarRange = document.getElementById("sidebar-range");
+const mainHeading = document.getElementById("main-heading");
+const rangeLabel = document.getElementById("range-label");
+const viewTitle = document.getElementById("view-title");
+const viewSwitcher = document.getElementById("view-switcher");
+const prevButton = document.getElementById("prev-button");
+const nextButton = document.getElementById("next-button");
+const todayButton = document.getElementById("today-button");
+const jumpToDayButton = document.getElementById("jump-to-day-button");
 const currentFocusTitle = document.getElementById("current-focus-title");
 const currentFocusMeta = document.getElementById("current-focus-meta");
-const calendarHeader = document.getElementById("calendar-header");
-const timeColumn = document.getElementById("time-column");
-const weekGrid = document.getElementById("week-grid");
-const prevWeekButton = document.getElementById("prev-week");
-const todayWeekButton = document.getElementById("today-week");
-const nextWeekButton = document.getElementById("next-week");
-const eventCardTemplate = document.getElementById("event-card-template");
+const singleAddForm = document.getElementById("single-add-form");
+const singleTitle = document.getElementById("single-title");
+const singleNotes = document.getElementById("single-notes");
+const singleDate = document.getElementById("single-date");
+const singleHour = document.getElementById("single-hour");
+const singleDuration = document.getElementById("single-duration");
+const bulkAddForm = document.getElementById("bulk-add-form");
+const bulkTitle = document.getElementById("bulk-title");
+const bulkNotes = document.getElementById("bulk-notes");
+const bulkHour = document.getElementById("bulk-hour");
+const bulkDuration = document.getElementById("bulk-duration");
+const bulkDayPills = document.getElementById("bulk-day-pills");
+const bulkAddPanel = document.getElementById("bulk-add-panel");
+const quickAddPanel = document.getElementById("quick-add-panel");
+const editorForm = document.getElementById("editor-form");
+const editorEmpty = document.getElementById("editor-empty");
+const editorTitle = document.getElementById("editor-title");
+const editorNotes = document.getElementById("editor-notes");
+const editorHour = document.getElementById("editor-hour");
+const editorDuration = document.getElementById("editor-duration");
+const editorDoing = document.getElementById("editor-doing");
+const editorDone = document.getElementById("editor-done");
+const deleteEventButton = document.getElementById("delete-event-button");
+const dayView = document.getElementById("day-view");
+const weekView = document.getElementById("week-view");
+const monthView = document.getElementById("month-view");
+const eventChipTemplate = document.getElementById("event-chip-template");
 
-let didAutoScroll = false;
-
-buildHourOptions();
+buildHourSelect(singleHour);
+buildHourSelect(bulkHour);
+buildHourSelect(editorHour);
+buildDurationSelect(singleDuration);
+buildDurationSelect(bulkDuration);
+buildDurationSelect(editorDuration);
 bindEvents();
-seedStarterEntries();
+seedStarterEvents();
 render();
 
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      return { weekOffset: 0, entries: {} };
+      return createDefaultState();
     }
 
     const parsed = JSON.parse(raw);
     return {
-      weekOffset: Number.isInteger(parsed.weekOffset) ? parsed.weekOffset : 0,
-      entries: parsed.entries && typeof parsed.entries === "object" ? parsed.entries : {},
+      view: ["day", "week", "month"].includes(parsed.view) ? parsed.view : "day",
+      currentDate: parsed.currentDate || formatDateKey(today),
+      events: Array.isArray(parsed.events) ? parsed.events : [],
+      selectedEventId: parsed.selectedEventId || null,
     };
   } catch {
-    return { weekOffset: 0, entries: {} };
+    return createDefaultState();
   }
+}
+
+function createDefaultState() {
+  return {
+    view: "day",
+    currentDate: formatDateKey(today),
+    events: [],
+    selectedEventId: null,
+  };
 }
 
 function saveState() {
@@ -59,18 +93,35 @@ function saveState() {
 }
 
 function bindEvents() {
-  plannerForm.addEventListener("submit", handlePlannerSubmit);
-  prevWeekButton.addEventListener("click", () => shiftWeek(-1));
-  nextWeekButton.addEventListener("click", () => shiftWeek(1));
-  todayWeekButton.addEventListener("click", () => {
-    state.weekOffset = 0;
-    didAutoScroll = false;
+  viewSwitcher.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-view]");
+    if (!button) {
+      return;
+    }
+
+    state.view = button.dataset.view;
+    state.selectedEventId = null;
     render();
   });
+
+  prevButton.addEventListener("click", () => shiftRange(-1));
+  nextButton.addEventListener("click", () => shiftRange(1));
+  todayButton.addEventListener("click", () => {
+    state.currentDate = formatDateKey(today);
+    render();
+  });
+  jumpToDayButton.addEventListener("click", () => {
+    state.view = "day";
+    render();
+  });
+  singleAddForm.addEventListener("submit", handleSingleAdd);
+  bulkAddForm.addEventListener("submit", handleBulkAdd);
+  editorForm.addEventListener("submit", handleEditorSave);
+  deleteEventButton.addEventListener("click", handleEditorDelete);
 }
 
-function buildHourOptions() {
-  entryHour.innerHTML = "";
+function buildHourSelect(select) {
+  select.innerHTML = "";
   for (let hour = 0; hour < 24; hour += 1) {
     const option = document.createElement("option");
     option.value = String(hour);
@@ -78,78 +129,242 @@ function buildHourOptions() {
     if (hour === new Date().getHours()) {
       option.selected = true;
     }
-    entryHour.appendChild(option);
+    select.appendChild(option);
   }
 }
 
-function seedStarterEntries() {
-  if (Object.keys(state.entries).length > 0) {
+function buildDurationSelect(select) {
+  select.innerHTML = "";
+  for (let duration = 1; duration <= 6; duration += 1) {
+    const option = document.createElement("option");
+    option.value = String(duration);
+    option.textContent = `${duration} hour${duration === 1 ? "" : "s"}`;
+    select.appendChild(option);
+  }
+}
+
+function seedStarterEvents() {
+  if (state.events.length > 0) {
     return;
   }
 
   const todayKey = formatDateKey(today);
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
-  const tomorrowKey = formatDateKey(tomorrow);
 
-  setEntry(todayKey, 9, {
-    title: "Plan the day",
-    notes: "Set the 2 or 3 things that matter most.",
+  state.events.push(
+    createEvent({
+      title: "Plan the day",
+      notes: "Pick the top things first.",
+      dateKey: todayKey,
+      startHour: 9,
+      duration: 1,
+    }),
+    createEvent({
+      title: "Focused work",
+      notes: "Use this block for deep work.",
+      dateKey: todayKey,
+      startHour: 13,
+      duration: 2,
+    }),
+    createEvent({
+      title: "Reset for tomorrow",
+      notes: "Review and prep.",
+      dateKey: formatDateKey(tomorrow),
+      startHour: 20,
+      duration: 1,
+    })
+  );
+}
+
+function createEvent({ title, notes, dateKey, startHour, duration }) {
+  return {
+    id: crypto.randomUUID(),
+    title,
+    notes,
+    dateKey,
+    startHour,
+    duration,
     doing: false,
     done: false,
+  };
+}
+
+function handleSingleAdd(event) {
+  event.preventDefault();
+
+  const title = singleTitle.value.trim();
+  if (!title) {
+    return;
+  }
+
+  state.events.push(
+    createEvent({
+      title,
+      notes: singleNotes.value.trim(),
+      dateKey: singleDate.value,
+      startHour: Number(singleHour.value),
+      duration: Number(singleDuration.value),
+    })
+  );
+
+  singleAddForm.reset();
+  singleHour.value = String(new Date().getHours());
+  singleDuration.value = "1";
+  render();
+}
+
+function handleBulkAdd(event) {
+  event.preventDefault();
+
+  const title = bulkTitle.value.trim();
+  const dayKeys = [...bulkDayPills.querySelectorAll("input:checked")].map((input) => input.value);
+  if (!title || dayKeys.length === 0) {
+    return;
+  }
+
+  dayKeys.forEach((dateKey) => {
+    state.events.push(
+      createEvent({
+        title,
+        notes: bulkNotes.value.trim(),
+        dateKey,
+        startHour: Number(bulkHour.value),
+        duration: Number(bulkDuration.value),
+      })
+    );
   });
 
-  setEntry(todayKey, 13, {
-    title: "Focused work",
-    notes: "Keep this block protected.",
-    doing: false,
-    done: false,
+  bulkAddForm.reset();
+  bulkHour.value = String(new Date().getHours());
+  bulkDuration.value = "1";
+  render();
+}
+
+function handleEditorSave(event) {
+  event.preventDefault();
+
+  const selected = getSelectedEvent();
+  if (!selected) {
+    return;
+  }
+
+  selected.title = editorTitle.value.trim();
+  selected.notes = editorNotes.value.trim();
+  selected.startHour = Number(editorHour.value);
+  selected.duration = Number(editorDuration.value);
+  selected.done = editorDone.checked;
+
+  state.events.forEach((item) => {
+    item.doing = editorDoing.checked ? item.id === selected.id : false;
   });
 
-  setEntry(tomorrowKey, 19, {
-    title: "Reset for tomorrow",
-    notes: "Review and prep the next day.",
-    doing: false,
-    done: false,
-  });
+  if (!selected.title) {
+    deleteSelectedEvent();
+  }
 
-  saveState();
+  render();
+}
+
+function handleEditorDelete() {
+  deleteSelectedEvent();
+  render();
+}
+
+function deleteSelectedEvent() {
+  const id = state.selectedEventId;
+  state.events = state.events.filter((event) => event.id !== id);
+  state.selectedEventId = null;
+}
+
+function shiftRange(step) {
+  const current = parseDateKey(state.currentDate);
+
+  if (state.view === "day") {
+    current.setDate(current.getDate() + step);
+  } else if (state.view === "week") {
+    current.setDate(current.getDate() + step * 7);
+  } else {
+    current.setMonth(current.getMonth() + step, 1);
+  }
+
+  state.currentDate = formatDateKey(current);
+  render();
 }
 
 function render() {
-  const weekDates = getVisibleWeekDates();
-  buildWeekdayControls(weekDates);
-  renderWeekLabels(weekDates);
-  renderHeader(weekDates);
-  renderTimeColumn();
-  renderGrid(weekDates);
-  renderCurrentFocus();
+  const activeDate = parseDateKey(state.currentDate);
+  renderHeaderLabels(activeDate);
+  renderViewSwitcher();
+  renderDateOptions();
+  renderBulkDayPills();
+  renderFocus();
+  renderPanels();
+  renderDayView(activeDate);
+  renderWeekView(activeDate);
+  renderMonthView(activeDate);
+  renderEditor();
   saveState();
-  autoScrollToCurrentHour();
 }
 
-function buildWeekdayControls(weekDates) {
-  entryDay.innerHTML = "";
-  weekdayPills.innerHTML = "";
+function renderHeaderLabels(activeDate) {
+  const weekDates = getWeekDates(activeDate);
+
+  if (state.view === "day") {
+    mainHeading.textContent = "Today";
+    viewTitle.textContent = `${weekdayLabels[activeDate.getDay()]} view`;
+    rangeLabel.textContent = `${weekdayLabels[activeDate.getDay()]} ${monthLongFormatter.format(activeDate)}`;
+  } else if (state.view === "week") {
+    mainHeading.textContent = "Week";
+    viewTitle.textContent = "Week view";
+    rangeLabel.textContent = `${monthShortFormatter.format(weekDates[0])} - ${monthShortFormatter.format(
+      weekDates[6]
+    )}`;
+  } else {
+    mainHeading.textContent = "Month";
+    viewTitle.textContent = "Month view";
+    rangeLabel.textContent = activeDate.toLocaleDateString(undefined, {
+      month: "long",
+      year: "numeric",
+    });
+  }
+}
+
+function renderViewSwitcher() {
+  [...viewSwitcher.querySelectorAll("[data-view]")].forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.view === state.view);
+  });
+}
+
+function renderDateOptions() {
+  const activeDate = parseDateKey(state.currentDate);
+  const weekDates = getWeekDates(activeDate);
+  singleDate.innerHTML = "";
 
   weekDates.forEach((date) => {
-    const dateKey = formatDateKey(date);
-
     const option = document.createElement("option");
-    option.value = dateKey;
-    option.textContent = `${weekdayLabels[date.getDay()]} ${shortFormatter.format(date)}`;
-    if (isSameDate(date, today)) {
+    option.value = formatDateKey(date);
+    option.textContent = `${weekdayLabels[date.getDay()]} ${monthShortFormatter.format(date)}`;
+    if (isSameDate(date, activeDate)) {
       option.selected = true;
     }
-    entryDay.appendChild(option);
+    singleDate.appendChild(option);
+  });
+}
 
+function renderBulkDayPills() {
+  const activeDate = parseDateKey(state.currentDate);
+  const weekDates = getWeekDates(activeDate);
+  bulkDayPills.innerHTML = "";
+
+  weekDates.forEach((date) => {
     const label = document.createElement("label");
-    label.className = "weekday-pill";
+    label.className = "pill-option";
 
     const input = document.createElement("input");
     input.type = "checkbox";
-    input.value = dateKey;
-    if (isSameDate(date, today)) {
+    input.value = formatDateKey(date);
+    if (isSameDate(date, activeDate)) {
       input.checked = true;
     }
 
@@ -157,257 +372,270 @@ function buildWeekdayControls(weekDates) {
     text.textContent = weekdayLabels[date.getDay()];
 
     label.append(input, text);
-    weekdayPills.appendChild(label);
+    bulkDayPills.appendChild(label);
   });
 }
 
-function renderWeekLabels(weekDates) {
-  const label = `${longFormatter.format(weekDates[0])} - ${longFormatter.format(weekDates[6])}`;
-  weekLabel.textContent = label;
-  sidebarRange.textContent = label;
+function renderFocus() {
+  const current = state.events.find((event) => event.doing);
+  if (!current) {
+    currentFocusTitle.textContent = "Nothing checked yet";
+    currentFocusMeta.textContent = "Mark an event as your current focus and it will show up here.";
+    return;
+  }
+
+  const date = parseDateKey(current.dateKey);
+  currentFocusTitle.textContent = current.title || "Untitled event";
+  currentFocusMeta.textContent = `${weekdayLabels[date.getDay()]} ${monthShortFormatter.format(date)} at ${formatHour(
+    current.startHour
+  )}${current.notes ? ` • ${current.notes}` : ""}`;
 }
 
-function renderHeader(weekDates) {
-  calendarHeader.innerHTML = '<div class="time-header"></div>';
+function renderPanels() {
+  const weekMode = state.view === "week";
+  bulkAddPanel.classList.toggle("hidden", !weekMode);
+  jumpToDayButton.classList.toggle("hidden", !weekMode);
+  quickAddPanel.classList.toggle("hidden", false);
+  dayView.classList.toggle("hidden", state.view !== "day");
+  weekView.classList.toggle("hidden", state.view !== "week");
+  monthView.classList.toggle("hidden", state.view !== "month");
+}
 
-  weekDates.forEach((date) => {
-    const item = document.createElement("div");
-    item.className = "day-header-cell";
-    if (isSameDate(date, today)) {
-      item.classList.add("is-today");
+function renderDayView(activeDate) {
+  dayView.innerHTML = "";
+  const wrapper = document.createElement("div");
+  wrapper.className = "day-layout";
+
+  for (let hour = 0; hour < 24; hour += 1) {
+    const row = document.createElement("div");
+    row.className = "hour-row";
+    if (isSameDate(activeDate, today) && hour === new Date().getHours()) {
+      row.classList.add("is-now");
     }
 
-    item.innerHTML = `<span>${weekdayLabels[date.getDay()]}</span><strong>${date.getDate()}</strong>`;
-    calendarHeader.appendChild(item);
-  });
-}
+    const time = document.createElement("div");
+    time.className = "hour-label";
+    time.textContent = formatHour(hour);
 
-function renderTimeColumn() {
-  timeColumn.innerHTML = "";
-  for (let hour = 0; hour < 24; hour += 1) {
-    const label = document.createElement("div");
-    label.className = "time-slot";
-    label.textContent = formatHour(hour);
-    timeColumn.appendChild(label);
+    const lane = document.createElement("div");
+    lane.className = "hour-lane";
+    lane.addEventListener("click", () => createAtSlot(formatDateKey(activeDate), hour));
+
+    getEventsForDate(formatDateKey(activeDate))
+      .filter((event) => event.startHour === hour)
+      .sort(sortEvents)
+      .forEach((event) => lane.appendChild(createEventChip(event)));
+
+    row.append(time, lane);
+    wrapper.appendChild(row);
   }
+
+  dayView.appendChild(wrapper);
 }
 
-function renderGrid(weekDates) {
-  weekGrid.innerHTML = "";
+function renderWeekView(activeDate) {
+  weekView.innerHTML = "";
+  const weekDates = getWeekDates(activeDate);
+
+  const header = document.createElement("div");
+  header.className = "week-header";
+  header.appendChild(document.createElement("div"));
 
   weekDates.forEach((date) => {
-    const column = document.createElement("div");
-    column.className = "day-column";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "week-day-button";
+    if (isSameDate(date, activeDate)) {
+      button.classList.add("is-selected");
+    }
     if (isSameDate(date, today)) {
-      column.classList.add("is-today");
+      button.classList.add("is-today");
+    }
+    button.innerHTML = `<span>${weekdayLabels[date.getDay()]}</span><strong>${date.getDate()}</strong>`;
+    button.addEventListener("click", () => {
+      state.currentDate = formatDateKey(date);
+      render();
+    });
+    header.appendChild(button);
+  });
+
+  const grid = document.createElement("div");
+  grid.className = "week-layout";
+
+  for (let hour = 0; hour < 24; hour += 1) {
+    const time = document.createElement("div");
+    time.className = "week-time";
+    time.textContent = formatHour(hour);
+    grid.appendChild(time);
+
+    weekDates.forEach((date) => {
+      const cell = document.createElement("div");
+      cell.className = "week-cell";
+      if (isSameDate(date, today) && hour === new Date().getHours()) {
+        cell.classList.add("is-now");
+      }
+      cell.addEventListener("click", () => createAtSlot(formatDateKey(date), hour));
+
+      getEventsForDate(formatDateKey(date))
+        .filter((event) => event.startHour === hour)
+        .sort(sortEvents)
+        .forEach((event) => cell.appendChild(createEventChip(event)));
+
+      grid.appendChild(cell);
+    });
+  }
+
+  weekView.append(header, grid);
+}
+
+function renderMonthView(activeDate) {
+  monthView.innerHTML = "";
+  const dates = getMonthGridDates(activeDate);
+
+  const weekdays = document.createElement("div");
+  weekdays.className = "month-weekdays";
+  weekdayLabels.forEach((label) => {
+    const cell = document.createElement("div");
+    cell.className = "month-weekday";
+    cell.textContent = label;
+    weekdays.appendChild(cell);
+  });
+
+  const grid = document.createElement("div");
+  grid.className = "month-grid";
+
+  dates.forEach((date) => {
+    const cell = document.createElement("button");
+    cell.type = "button";
+    cell.className = "month-cell";
+    if (date.getMonth() !== activeDate.getMonth()) {
+      cell.classList.add("is-muted");
+    }
+    if (isSameDate(date, today)) {
+      cell.classList.add("is-today");
+    }
+    if (isSameDate(date, activeDate)) {
+      cell.classList.add("is-selected");
     }
 
     const dateKey = formatDateKey(date);
+    const dayEvents = getEventsForDate(dateKey).sort(sortEvents);
+    const dateBadge = document.createElement("span");
+    dateBadge.className = "month-date";
+    dateBadge.textContent = String(date.getDate());
+    cell.appendChild(dateBadge);
 
-    for (let hour = 0; hour < 24; hour += 1) {
-      const cell = document.createElement("div");
-      cell.className = "calendar-cell";
-      if (isCurrentHour(date, hour)) {
-        cell.classList.add("is-now");
-      }
+    dayEvents.slice(0, 3).forEach((event) => {
+      const badge = document.createElement("div");
+      badge.className = "month-event";
+      badge.textContent = `${formatHour(event.startHour)} ${event.title}`;
+      cell.appendChild(badge);
+    });
 
-      const entry = getEntry(dateKey, hour);
-      const fragment = eventCardTemplate.content.cloneNode(true);
-      const card = fragment.querySelector(".event-card");
-      const hourText = fragment.querySelector(".event-hour");
-      const titleInput = fragment.querySelector(".event-title");
-      const notesInput = fragment.querySelector(".event-notes");
-      const doingToggle = fragment.querySelector(".doing-toggle");
-      const doneToggle = fragment.querySelector(".done-toggle");
-      const clearButton = fragment.querySelector(".clear-button");
-
-      hourText.textContent = formatHour(hour);
-      titleInput.value = entry?.title || "";
-      notesInput.value = entry?.notes || "";
-      doingToggle.checked = Boolean(entry?.doing);
-      doneToggle.checked = Boolean(entry?.done);
-
-      card.classList.toggle("filled", Boolean(entry?.title || entry?.notes));
-      card.classList.toggle("doing", Boolean(entry?.doing));
-      card.classList.toggle("done", Boolean(entry?.done));
-
-      titleInput.addEventListener("change", () => {
-        upsertEntry(dateKey, hour, {
-          title: titleInput.value.trim(),
-          notes: notesInput.value.trim(),
-        });
-      });
-
-      notesInput.addEventListener("change", () => {
-        upsertEntry(dateKey, hour, {
-          title: titleInput.value.trim(),
-          notes: notesInput.value.trim(),
-        });
-      });
-
-      doingToggle.addEventListener("change", () => {
-        setDoingEntry(dateKey, hour, doingToggle.checked);
-      });
-
-      doneToggle.addEventListener("change", () => {
-        toggleDoneEntry(dateKey, hour, doneToggle.checked);
-      });
-
-      clearButton.addEventListener("click", () => {
-        clearEntry(dateKey, hour);
-      });
-
-      cell.appendChild(fragment);
-      column.appendChild(cell);
+    if (dayEvents.length > 3) {
+      const more = document.createElement("div");
+      more.className = "month-more";
+      more.textContent = `+${dayEvents.length - 3} more`;
+      cell.appendChild(more);
     }
 
-    weekGrid.appendChild(column);
+    cell.addEventListener("click", () => {
+      state.currentDate = dateKey;
+      state.view = "day";
+      render();
+    });
+
+    grid.appendChild(cell);
   });
+
+  monthView.append(weekdays, grid);
 }
 
-function renderCurrentFocus() {
-  const current = findDoingEntry();
-  if (!current) {
-    currentFocusTitle.textContent = "Nothing checked yet";
-    currentFocusMeta.textContent = "Mark any calendar block as your current focus.";
+function createAtSlot(dateKey, hour) {
+  const event = createEvent({
+    title: "New event",
+    notes: "",
+    dateKey,
+    startHour: hour,
+    duration: 1,
+  });
+
+  state.events.push(event);
+  state.selectedEventId = event.id;
+  render();
+}
+
+function createEventChip(event) {
+  const fragment = eventChipTemplate.content.cloneNode(true);
+  const chip = fragment.querySelector(".event-chip");
+  const time = fragment.querySelector(".event-chip-time");
+  const title = fragment.querySelector(".event-chip-title");
+  const notes = fragment.querySelector(".event-chip-notes");
+
+  time.textContent = `${formatHour(event.startHour)} • ${event.duration}h`;
+  title.textContent = event.title || "Untitled";
+  notes.textContent = event.notes || "";
+
+  chip.classList.toggle("is-doing", event.doing);
+  chip.classList.toggle("is-done", event.done);
+  chip.classList.toggle("is-selected", state.selectedEventId === event.id);
+  chip.addEventListener("click", (clickEvent) => {
+    clickEvent.stopPropagation();
+    state.selectedEventId = event.id;
+    render();
+  });
+
+  return fragment;
+}
+
+function renderEditor() {
+  const selected = getSelectedEvent();
+  const hasSelected = Boolean(selected);
+
+  editorForm.classList.toggle("hidden", !hasSelected);
+  editorEmpty.classList.toggle("hidden", hasSelected);
+
+  if (!selected) {
     return;
   }
 
-  const day = parseDateKey(current.dateKey);
-  currentFocusTitle.textContent = current.entry.title || "Untitled block";
-  currentFocusMeta.textContent = `${weekdayLabels[day.getDay()]} ${shortFormatter.format(day)} at ${formatHour(
-    current.hour
-  )}${current.entry.notes ? ` • ${current.entry.notes}` : ""}`;
+  editorTitle.value = selected.title;
+  editorNotes.value = selected.notes;
+  editorHour.value = String(selected.startHour);
+  editorDuration.value = String(selected.duration);
+  editorDoing.checked = selected.doing;
+  editorDone.checked = selected.done;
 }
 
-function handlePlannerSubmit(event) {
-  event.preventDefault();
-
-  const title = entryTitle.value.trim();
-  const notes = entryNotes.value.trim();
-  const hour = Number(entryHour.value);
-  const selectedDays = [...weekdayPills.querySelectorAll("input:checked")].map((input) => input.value);
-  const targetDays = selectedDays.length ? selectedDays : [entryDay.value];
-
-  if (!title || Number.isNaN(hour)) {
-    return;
-  }
-
-  targetDays.forEach((dateKey) => {
-    const existing = getEntry(dateKey, hour);
-    setEntry(dateKey, hour, {
-      title,
-      notes,
-      doing: existing?.doing || false,
-      done: existing?.done || false,
-    });
-  });
-
-  plannerForm.reset();
-  entryHour.value = String(new Date().getHours());
-  render();
+function getSelectedEvent() {
+  return state.events.find((event) => event.id === state.selectedEventId) || null;
 }
 
-function shiftWeek(delta) {
-  state.weekOffset += delta;
-  didAutoScroll = false;
-  render();
+function getEventsForDate(dateKey) {
+  return state.events.filter((event) => event.dateKey === dateKey);
 }
 
-function upsertEntry(dateKey, hour, partial) {
-  const existing = getEntry(dateKey, hour) || {
-    title: "",
-    notes: "",
-    doing: false,
-    done: false,
-  };
-
-  const next = { ...existing, ...partial };
-
-  if (!next.title && !next.notes && !next.doing && !next.done) {
-    deleteEntry(dateKey, hour);
-  } else {
-    setEntry(dateKey, hour, next);
-  }
-
-  render();
+function sortEvents(a, b) {
+  return a.startHour - b.startHour || a.title.localeCompare(b.title);
 }
 
-function setDoingEntry(dateKey, hour, isDoing) {
-  Object.keys(state.entries).forEach((storedDateKey) => {
-    Object.keys(state.entries[storedDateKey]).forEach((storedHour) => {
-      state.entries[storedDateKey][storedHour].doing =
-        isDoing && storedDateKey === dateKey && Number(storedHour) === hour;
-    });
-  });
-
-  if (isDoing && !getEntry(dateKey, hour)) {
-    setEntry(dateKey, hour, {
-      title: "",
-      notes: "",
-      doing: true,
-      done: false,
-    });
-  }
-
-  render();
-}
-
-function toggleDoneEntry(dateKey, hour, isDone) {
-  const existing = getEntry(dateKey, hour) || {
-    title: "",
-    notes: "",
-    doing: false,
-    done: false,
-  };
-
-  setEntry(dateKey, hour, {
-    ...existing,
-    done: isDone,
-    doing: isDone ? false : existing.doing,
-  });
-
-  render();
-}
-
-function clearEntry(dateKey, hour) {
-  deleteEntry(dateKey, hour);
-  render();
-}
-
-function getVisibleWeekDates() {
-  const base = startOfWeek(today);
-  const start = new Date(base);
-  start.setDate(base.getDate() + state.weekOffset * 7);
-
+function getWeekDates(date) {
+  const start = startOfWeek(date);
   return Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(start);
-    date.setDate(start.getDate() + index);
-    return date;
+    const next = new Date(start);
+    next.setDate(start.getDate() + index);
+    return next;
   });
 }
 
-function findDoingEntry() {
-  for (const [dateKey, hours] of Object.entries(state.entries)) {
-    for (const [hourKey, entry] of Object.entries(hours)) {
-      if (entry.doing) {
-        return { dateKey, hour: Number(hourKey), entry };
-      }
-    }
-  }
-  return null;
-}
-
-function autoScrollToCurrentHour() {
-  if (didAutoScroll || state.weekOffset !== 0) {
-    return;
-  }
-
-  const currentCell = weekGrid.querySelector(".calendar-cell.is-now");
-  if (currentCell) {
-    currentCell.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-    didAutoScroll = true;
-  }
+function getMonthGridDates(date) {
+  const first = new Date(date.getFullYear(), date.getMonth(), 1);
+  const start = startOfWeek(first);
+  return Array.from({ length: 42 }, (_, index) => {
+    const next = new Date(start);
+    next.setDate(start.getDate() + index);
+    return next;
+  });
 }
 
 function formatHour(hour) {
@@ -446,31 +674,4 @@ function isSameDate(a, b) {
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
   );
-}
-
-function isCurrentHour(date, hour) {
-  const now = new Date();
-  return isSameDate(date, now) && hour === now.getHours();
-}
-
-function getEntry(dateKey, hour) {
-  return state.entries[dateKey]?.[hour] || null;
-}
-
-function setEntry(dateKey, hour, entry) {
-  if (!state.entries[dateKey]) {
-    state.entries[dateKey] = {};
-  }
-  state.entries[dateKey][hour] = entry;
-}
-
-function deleteEntry(dateKey, hour) {
-  if (!state.entries[dateKey]) {
-    return;
-  }
-
-  delete state.entries[dateKey][hour];
-  if (Object.keys(state.entries[dateKey]).length === 0) {
-    delete state.entries[dateKey];
-  }
 }
