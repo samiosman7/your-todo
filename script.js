@@ -1,6 +1,6 @@
-import { Clerk } from "@clerk/clerk-js";
+import { createClient } from "@supabase/supabase-js";
 
-const STORAGE_KEY_PREFIX = "flowplan-calendar-v4";
+const STORAGE_KEY_PREFIX = "flowplan-calendar-v5";
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const monthShortFormatter = new Intl.DateTimeFormat(undefined, {
   month: "short",
@@ -12,13 +12,18 @@ const monthLongFormatter = new Intl.DateTimeFormat(undefined, {
 });
 
 const today = startOfDay(new Date());
-const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
 
 const authShell = document.getElementById("auth-shell");
 const appShell = document.getElementById("app-shell");
 const configError = document.getElementById("config-error");
-const signInContainer = document.getElementById("sign-in");
-const userButtonContainer = document.getElementById("user-button");
+const authForm = document.getElementById("auth-form");
+const authEmail = document.getElementById("auth-email");
+const authMessage = document.getElementById("auth-message");
+const userEmail = document.getElementById("user-email");
+const signOutButton = document.getElementById("sign-out-button");
 const mainHeading = document.getElementById("main-heading");
 const rangeLabel = document.getElementById("range-label");
 const viewTitle = document.getElementById("view-title");
@@ -57,7 +62,7 @@ const weekView = document.getElementById("week-view");
 const monthView = document.getElementById("month-view");
 const eventChipTemplate = document.getElementById("event-chip-template");
 
-let clerk = null;
+let supabase = null;
 let state = createDefaultState();
 let activeUserId = null;
 
@@ -71,35 +76,36 @@ bindEvents();
 initializeAuth();
 
 async function initializeAuth() {
-  if (!publishableKey) {
+  if (!supabaseUrl || !supabaseAnonKey) {
     authShell.classList.remove("hidden");
     configError.classList.remove("hidden");
     configError.textContent =
-      "Add your Clerk key in .env.local as VITE_CLERK_PUBLISHABLE_KEY, then reload.";
+      "Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local, then reload.";
     return;
   }
 
-  clerk = new Clerk(publishableKey);
-  await clerk.load();
-  clerk.addListener(handleAuthChange);
-  handleAuthChange();
+  supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  handleSession(session);
+
+  supabase.auth.onAuthStateChange((_event, sessionData) => {
+    handleSession(sessionData);
+  });
 }
 
-function handleAuthChange() {
-  const user = clerk?.user || null;
+function handleSession(session) {
+  const user = session?.user || null;
 
   if (!user) {
     activeUserId = null;
     state = createDefaultState();
     appShell.classList.add("hidden");
     authShell.classList.remove("hidden");
-    configError.classList.add("hidden");
-    signInContainer.innerHTML = "";
-    userButtonContainer.innerHTML = "";
-    clerk.mountSignIn(signInContainer, {
-      afterSignInUrl: window.location.href,
-      afterSignUpUrl: window.location.href,
-    });
+    userEmail.textContent = "";
+    authMessage.classList.add("hidden");
     return;
   }
 
@@ -109,13 +115,9 @@ function handleAuthChange() {
     seedStarterEvents();
   }
 
+  userEmail.textContent = user.email || "";
   authShell.classList.add("hidden");
   appShell.classList.remove("hidden");
-  signInContainer.innerHTML = "";
-  userButtonContainer.innerHTML = "";
-  clerk.mountUserButton(userButtonContainer, {
-    afterSignOutUrl: window.location.href,
-  });
   render();
 }
 
@@ -160,6 +162,9 @@ function saveState() {
 }
 
 function bindEvents() {
+  authForm.addEventListener("submit", handleAuthSubmit);
+  signOutButton.addEventListener("click", handleSignOut);
+
   viewSwitcher.addEventListener("click", (event) => {
     const button = event.target.closest("[data-view]");
     if (!button) {
@@ -185,6 +190,40 @@ function bindEvents() {
   bulkAddForm.addEventListener("submit", handleBulkAdd);
   editorForm.addEventListener("submit", handleEditorSave);
   deleteEventButton.addEventListener("click", handleEditorDelete);
+}
+
+async function handleAuthSubmit(event) {
+  event.preventDefault();
+  authMessage.classList.add("hidden");
+
+  const email = authEmail.value.trim();
+  if (!email || !supabase) {
+    return;
+  }
+
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: siteUrl,
+    },
+  });
+
+  if (error) {
+    authMessage.textContent = error.message;
+  } else {
+    authMessage.textContent = "Check your email for the sign-in link.";
+    authForm.reset();
+  }
+
+  authMessage.classList.remove("hidden");
+}
+
+async function handleSignOut() {
+  if (!supabase) {
+    return;
+  }
+
+  await supabase.auth.signOut();
 }
 
 function buildHourSelect(select) {

@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@clerk/clerk-js": "^5.92.0"
+    "@supabase/supabase-js": "^2.57.4"
   },
   "devDependencies": {
     "vite": "^7.1.3"

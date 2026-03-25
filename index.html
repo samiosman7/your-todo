@@ -22,7 +22,14 @@
           every device.
         </p>
         <div id="config-error" class="config-error hidden"></div>
-        <div id="sign-in"></div>
+        <form id="auth-form" class="form-stack auth-form">
+          <label>
+            Email
+            <input id="auth-email" name="email" type="email" placeholder="you@example.com" required />
+          </label>
+          <button type="submit" class="primary-button">Send magic link</button>
+        </form>
+        <p id="auth-message" class="subtle hidden"></p>
       </div>
     </div>
 
@@ -187,7 +194,8 @@
           </div>
           <div class="topbar-actions">
             <button type="button" class="ghost-button" id="jump-to-day-button">Open selected day</button>
-            <div id="user-button"></div>
+            <span id="user-email" class="user-email"></span>
+            <button type="button" class="ghost-button" id="sign-out-button">Sign out</button>
           </div>
         </header>
 
