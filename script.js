@@ -12,7 +12,7 @@ const monthLongFormatter = new Intl.DateTimeFormat(undefined, {
 });
 
 const today = startOfDay(new Date());
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseUrl = normalizeSupabaseUrl(import.meta.env.VITE_SUPABASE_URL);
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
 
@@ -768,6 +768,23 @@ function formatHour(hour) {
   const suffix = hour >= 12 ? "PM" : "AM";
   const normalized = hour % 12 === 0 ? 12 : hour % 12;
   return `${normalized}:00 ${suffix}`;
+}
+
+function normalizeSupabaseUrl(rawUrl) {
+  if (!rawUrl) {
+    return rawUrl;
+  }
+
+  const trimmed = rawUrl.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
+  }
+
+  return `https://${trimmed}`;
 }
 
 function formatDateKey(date) {
