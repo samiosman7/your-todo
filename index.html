@@ -13,7 +13,20 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="app-shell">
+    <div id="auth-shell" class="auth-shell hidden">
+      <div class="auth-card">
+        <p class="eyebrow">FlowPlan</p>
+        <h1>Sign in to your planner</h1>
+        <p class="subtle">
+          Your calendar stays tied to your account, so your schedule is yours on
+          every device.
+        </p>
+        <div id="config-error" class="config-error hidden"></div>
+        <div id="sign-in"></div>
+      </div>
+    </div>
+
+    <div id="app-shell" class="app-shell hidden">
       <aside class="sidebar">
         <div class="brand-card">
           <p class="eyebrow">FlowPlan</p>
@@ -172,7 +185,10 @@
             <p class="eyebrow">Planner</p>
             <h2 id="view-title">Day view</h2>
           </div>
-          <button type="button" class="ghost-button" id="jump-to-day-button">Open selected day</button>
+          <div class="topbar-actions">
+            <button type="button" class="ghost-button" id="jump-to-day-button">Open selected day</button>
+            <div id="user-button"></div>
+          </div>
         </header>
 
         <section class="calendar-panel">
@@ -191,6 +207,6 @@
       </button>
     </template>
 
-    <script src="script.js"></script>
+    <script type="module" src="script.js"></script>
   </body>
 </html>

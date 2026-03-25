@@ -1,4 +1,6 @@
-const STORAGE_KEY = "flowplan-calendar-v3";
+import { Clerk } from "@clerk/clerk-js";
+
+const STORAGE_KEY_PREFIX = "flowplan-calendar-v4";
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const monthShortFormatter = new Intl.DateTimeFormat(undefined, {
   month: "short",
@@ -10,8 +12,13 @@ const monthLongFormatter = new Intl.DateTimeFormat(undefined, {
 });
 
 const today = startOfDay(new Date());
-const state = loadState();
+const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
+const authShell = document.getElementById("auth-shell");
+const appShell = document.getElementById("app-shell");
+const configError = document.getElementById("config-error");
+const signInContainer = document.getElementById("sign-in");
+const userButtonContainer = document.getElementById("user-button");
 const mainHeading = document.getElementById("main-heading");
 const rangeLabel = document.getElementById("range-label");
 const viewTitle = document.getElementById("view-title");
@@ -50,6 +57,10 @@ const weekView = document.getElementById("week-view");
 const monthView = document.getElementById("month-view");
 const eventChipTemplate = document.getElementById("event-chip-template");
 
+let clerk = null;
+let state = createDefaultState();
+let activeUserId = null;
+
 buildHourSelect(singleHour);
 buildHourSelect(bulkHour);
 buildHourSelect(editorHour);
@@ -57,12 +68,73 @@ buildDurationSelect(singleDuration);
 buildDurationSelect(bulkDuration);
 buildDurationSelect(editorDuration);
 bindEvents();
-seedStarterEvents();
-render();
+initializeAuth();
 
-function loadState() {
+async function initializeAuth() {
+  if (!publishableKey) {
+    authShell.classList.remove("hidden");
+    configError.classList.remove("hidden");
+    configError.textContent =
+      "Add your Clerk key in .env.local as VITE_CLERK_PUBLISHABLE_KEY, then reload.";
+    return;
+  }
+
+  clerk = new Clerk(publishableKey);
+  await clerk.load();
+  clerk.addListener(handleAuthChange);
+  handleAuthChange();
+}
+
+function handleAuthChange() {
+  const user = clerk?.user || null;
+
+  if (!user) {
+    activeUserId = null;
+    state = createDefaultState();
+    appShell.classList.add("hidden");
+    authShell.classList.remove("hidden");
+    configError.classList.add("hidden");
+    signInContainer.innerHTML = "";
+    userButtonContainer.innerHTML = "";
+    clerk.mountSignIn(signInContainer, {
+      afterSignInUrl: window.location.href,
+      afterSignUpUrl: window.location.href,
+    });
+    return;
+  }
+
+  if (activeUserId !== user.id) {
+    activeUserId = user.id;
+    state = loadStateForUser(user.id);
+    seedStarterEvents();
+  }
+
+  authShell.classList.add("hidden");
+  appShell.classList.remove("hidden");
+  signInContainer.innerHTML = "";
+  userButtonContainer.innerHTML = "";
+  clerk.mountUserButton(userButtonContainer, {
+    afterSignOutUrl: window.location.href,
+  });
+  render();
+}
+
+function createDefaultState() {
+  return {
+    view: "day",
+    currentDate: formatDateKey(today),
+    events: [],
+    selectedEventId: null,
+  };
+}
+
+function getStorageKey(userId) {
+  return `${STORAGE_KEY_PREFIX}:${userId}`;
+}
+
+function loadStateForUser(userId) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getStorageKey(userId));
     if (!raw) {
       return createDefaultState();
     }
@@ -79,17 +151,12 @@ function loadState() {
   }
 }
 
-function createDefaultState() {
-  return {
-    view: "day",
-    currentDate: formatDateKey(today),
-    events: [],
-    selectedEventId: null,
-  };
-}
-
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (!activeUserId) {
+    return;
+  }
+
+  localStorage.setItem(getStorageKey(activeUserId), JSON.stringify(state));
 }
 
 function bindEvents() {

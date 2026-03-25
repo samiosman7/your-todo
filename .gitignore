@@ -1,2 +1,6 @@
 .vercel
 tools/
+.env
+.env.local
+node_modules/
+dist/
