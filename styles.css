@@ -183,6 +183,12 @@ h2 {
   font-weight: 700;
 }
 
+.oauth-button {
+  width: 100%;
+  justify-content: center;
+  background: white;
+}
+
 .focus-card {
   margin-top: 14px;
   padding: 14px;

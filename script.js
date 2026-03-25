@@ -22,6 +22,7 @@ const configError = document.getElementById("config-error");
 const authForm = document.getElementById("auth-form");
 const authEmail = document.getElementById("auth-email");
 const authMessage = document.getElementById("auth-message");
+const googleSignInButton = document.getElementById("google-sign-in-button");
 const userEmail = document.getElementById("user-email");
 const signOutButton = document.getElementById("sign-out-button");
 const mainHeading = document.getElementById("main-heading");
@@ -183,6 +184,7 @@ function saveState() {
 
 function bindEvents() {
   authForm.addEventListener("submit", handleAuthSubmit);
+  googleSignInButton.addEventListener("click", handleGoogleSignIn);
   signOutButton.addEventListener("click", handleSignOut);
 
   viewSwitcher.addEventListener("click", (event) => {
@@ -236,6 +238,26 @@ async function handleAuthSubmit(event) {
   }
 
   authMessage.classList.remove("hidden");
+}
+
+async function handleGoogleSignIn() {
+  if (!supabase) {
+    return;
+  }
+
+  authMessage.classList.add("hidden");
+
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: siteUrl,
+    },
+  });
+
+  if (error) {
+    authMessage.textContent = error.message;
+    authMessage.classList.remove("hidden");
+  }
 }
 
 async function handleSignOut() {
