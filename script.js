@@ -75,25 +75,45 @@ buildDurationSelect(editorDuration);
 bindEvents();
 initializeAuth();
 
+window.addEventListener("error", (event) => {
+  showFatalError(event.error?.message || "The app hit an unexpected error while loading.");
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  const message =
+    event.reason?.message || "The app hit an unexpected async error while loading.";
+  showFatalError(message);
+});
+
 async function initializeAuth() {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    authShell.classList.remove("hidden");
-    configError.classList.remove("hidden");
-    configError.textContent =
-      "Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local, then reload.";
-    return;
+  try {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      showFatalError(
+        "Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local, then reload."
+      );
+      return;
+    }
+
+    supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    handleSession(session);
+
+    supabase.auth.onAuthStateChange((_event, sessionData) => {
+      handleSession(sessionData);
+    });
+  } catch (error) {
+    showFatalError(error?.message || "Supabase failed to initialize.");
   }
+}
 
-  supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  handleSession(session);
-
-  supabase.auth.onAuthStateChange((_event, sessionData) => {
-    handleSession(sessionData);
-  });
+function showFatalError(message) {
+  authShell.classList.remove("hidden");
+  appShell.classList.add("hidden");
+  configError.classList.remove("hidden");
+  configError.textContent = message;
 }
 
 function handleSession(session) {
