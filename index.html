@@ -14,25 +14,54 @@
   </head>
   <body>
     <div id="auth-shell" class="auth-shell">
-      <div class="auth-card">
-        <p class="eyebrow">FlowPlan</p>
-        <h1>Sign in to your planner</h1>
-        <p class="subtle">
-          Your calendar stays tied to your account, so your schedule is yours on
-          every device.
-        </p>
-        <div id="config-error" class="config-error hidden"></div>
-        <form id="auth-form" class="form-stack auth-form">
-          <label>
-            Email
-            <input id="auth-email" name="email" type="email" placeholder="you@example.com" required />
-          </label>
-          <button type="submit" class="primary-button">Send magic link</button>
-          <button type="button" class="ghost-button oauth-button" id="google-sign-in-button">
-            Continue with Google
-          </button>
-        </form>
-        <p id="auth-message" class="subtle hidden"></p>
+      <div class="welcome-shell">
+        <section class="welcome-hero">
+          <p class="eyebrow">FlowPlan</p>
+          <h1>Welcome to a planner that actually feels manageable.</h1>
+          <p class="welcome-copy">
+            Zoom into today when you need focus, zoom out to week or month when
+            you need perspective, and keep your schedule synced to your account.
+          </p>
+
+          <div class="welcome-grid">
+            <article class="welcome-feature">
+              <strong>Day-first planning</strong>
+              <p>Open straight into the current day so you can see what matters now.</p>
+            </article>
+            <article class="welcome-feature">
+              <strong>Week + month zoom out</strong>
+              <p>Step back anytime to bulk-schedule your week or scan the full month.</p>
+            </article>
+            <article class="welcome-feature">
+              <strong>Mass add in week view</strong>
+              <p>Pick multiple days and drop in the same routine block in one pass.</p>
+            </article>
+            <article class="welcome-feature">
+              <strong>Focus mode built in</strong>
+              <p>Mark what you are currently doing and keep it pinned at the top.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="auth-card">
+          <p class="eyebrow">Get Started</p>
+          <h2>Sign in to your planner</h2>
+          <p class="subtle">
+            Use Google or a magic link to open your personal calendar.
+          </p>
+          <div id="config-error" class="config-error hidden"></div>
+          <form id="auth-form" class="form-stack auth-form">
+            <label>
+              Email
+              <input id="auth-email" name="email" type="email" placeholder="you@example.com" required />
+            </label>
+            <button type="submit" class="primary-button">Send magic link</button>
+            <button type="button" class="ghost-button oauth-button" id="google-sign-in-button">
+              Continue with Google
+            </button>
+          </form>
+          <p id="auth-message" class="subtle hidden"></p>
+        </section>
       </div>
     </div>
 
