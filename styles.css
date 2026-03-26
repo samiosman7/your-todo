@@ -159,6 +159,22 @@ button:hover { transform: translateY(-1px); }
 .month-event, .month-more { margin-top: 8px; font-size: .78rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .now-page { padding: 6px; }
 .now-card { margin-top: 0; }
+.now-schedule { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.now-schedule-list { display: grid; gap: 10px; margin-top: 12px; }
+.now-schedule-item {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+}
+.now-schedule-item strong { font-size: 0.95rem; }
+.now-schedule-item span { color: var(--muted); font-size: 0.84rem; }
+.now-schedule-item.is-current { border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
+.now-schedule-item.is-selected { background: var(--surface-hover); }
 .event-chip { min-width: 200px; max-width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--blue) 18%, var(--line)); background: color-mix(in srgb, var(--blue-soft) 45%, var(--surface)); text-align: left; display: grid; gap: 4px; cursor: grab; }
 .event-chip:active { cursor: grabbing; }
 .event-chip.is-dragging { opacity: .52; }

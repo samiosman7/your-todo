@@ -144,8 +144,8 @@
               </label>
             </div>
             <label>
-              Duration
-              <select id="single-duration" name="duration"></select>
+              End
+              <select id="single-end-time" name="endTime"></select>
             </label>
             <button type="button" class="ghost-button" id="single-start-after">Start after last task</button>
             <button type="submit" class="primary-button">Add Event</button>
@@ -174,8 +174,8 @@
                 <select id="bulk-time" name="time"></select>
               </label>
               <label>
-                Duration
-                <select id="bulk-duration" name="duration"></select>
+                End
+                <select id="bulk-end-time" name="endTime"></select>
               </label>
             </div>
             <fieldset class="day-picker">
@@ -209,8 +209,8 @@
                 <select id="editor-time" name="time"></select>
               </label>
               <label>
-                Duration
-                <select id="editor-duration" name="duration"></select>
+                End time
+                <select id="editor-end-time" name="endTime"></select>
               </label>
             </div>
             <label class="toggle-row">
@@ -252,8 +252,8 @@
                 <h2 id="now-summary-title">Nothing scheduled right now</h2>
                 <p id="now-summary-time" class="subtle"></p>
                 <p id="now-summary-notes" class="subtle"></p>
-                <p id="now-summary-empty" class="subtle">Use editing mode to adjust the current task.</p>
-                <button type="button" class="ghost-button" id="now-edit-toggle">Editing mode</button>
+                <p id="now-summary-empty" class="subtle">Your current task will show here automatically when its time arrives.</p>
+                <button type="button" class="ghost-button" id="now-edit-toggle">Edit schedule</button>
                 <div id="now-inline-editor" class="form-stack hidden">
                   <label>
                     Title
@@ -269,8 +269,8 @@
                       <select id="now-edit-time"></select>
                     </label>
                     <label>
-                      Duration
-                      <select id="now-edit-duration"></select>
+                      End time
+                      <select id="now-edit-end-time"></select>
                     </label>
                   </div>
                   <label class="toggle-row">
@@ -282,6 +282,15 @@
                     <span>Done</span>
                   </label>
                   <button type="button" class="primary-button" id="now-edit-save">Save changes</button>
+                </div>
+                <div id="now-schedule-panel" class="now-schedule hidden">
+                  <div class="section-heading">
+                    <div>
+                      <p class="eyebrow">Today</p>
+                      <h2>Schedule</h2>
+                    </div>
+                  </div>
+                  <div id="now-schedule-list" class="now-schedule-list"></div>
                 </div>
               </div>
             </section>

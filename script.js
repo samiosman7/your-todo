@@ -1,6 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
+ï»¿import { createClient } from "@supabase/supabase-js";
 
-const STORAGE_KEY_PREFIX = "flowplan-calendar-v6";
+const STORAGE_KEY_PREFIX = "flowplan-calendar-v7";
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const monthShortFormatter = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
 const monthLongFormatter = new Intl.DateTimeFormat(undefined, { month: "long", day: "numeric" });
@@ -35,13 +35,13 @@ const singleTitle = document.getElementById("single-title");
 const singleNotes = document.getElementById("single-notes");
 const singleDate = document.getElementById("single-date");
 const singleTime = document.getElementById("single-time");
-const singleDuration = document.getElementById("single-duration");
+const singleEndTime = document.getElementById("single-end-time");
 const singleStartAfterButton = document.getElementById("single-start-after");
 const bulkAddForm = document.getElementById("bulk-add-form");
 const bulkTitle = document.getElementById("bulk-title");
 const bulkNotes = document.getElementById("bulk-notes");
 const bulkTime = document.getElementById("bulk-time");
-const bulkDuration = document.getElementById("bulk-duration");
+const bulkEndTime = document.getElementById("bulk-end-time");
 const bulkDayPills = document.getElementById("bulk-day-pills");
 const bulkAddPanel = document.getElementById("bulk-add-panel");
 const bulkStartAfterButton = document.getElementById("bulk-start-after");
@@ -50,7 +50,7 @@ const editorEmpty = document.getElementById("editor-empty");
 const editorTitle = document.getElementById("editor-title");
 const editorNotes = document.getElementById("editor-notes");
 const editorTime = document.getElementById("editor-time");
-const editorDuration = document.getElementById("editor-duration");
+const editorEndTime = document.getElementById("editor-end-time");
 const editorDoing = document.getElementById("editor-doing");
 const editorDone = document.getElementById("editor-done");
 const duplicateEventButton = document.getElementById("duplicate-event-button");
@@ -65,10 +65,12 @@ const nowInlineEditor = document.getElementById("now-inline-editor");
 const nowEditTitle = document.getElementById("now-edit-title");
 const nowEditNotes = document.getElementById("now-edit-notes");
 const nowEditTime = document.getElementById("now-edit-time");
-const nowEditDuration = document.getElementById("now-edit-duration");
+const nowEditEndTime = document.getElementById("now-edit-end-time");
 const nowEditDoing = document.getElementById("now-edit-doing");
 const nowEditDone = document.getElementById("now-edit-done");
 const nowEditSave = document.getElementById("now-edit-save");
+const nowSchedulePanel = document.getElementById("now-schedule-panel");
+const nowScheduleList = document.getElementById("now-schedule-list");
 const dayView = document.getElementById("day-view");
 const weekView = document.getElementById("week-view");
 const monthView = document.getElementById("month-view");
@@ -79,8 +81,7 @@ let state = createDefaultState();
 let activeUserId = null;
 let draggedEventId = null;
 
-[singleTime, bulkTime, editorTime, nowEditTime].forEach(buildTimeSelect);
-[singleDuration, bulkDuration, editorDuration, nowEditDuration].forEach(buildDurationSelect);
+[singleTime, singleEndTime, bulkTime, bulkEndTime, editorTime, editorEndTime, nowEditTime, nowEditEndTime].forEach(buildTimeSelect);
 bindEvents();
 initializeAuth();
 
@@ -127,9 +128,7 @@ function getStorageKey(userId) {
 function loadStateForUser(userId) {
   try {
     const raw = localStorage.getItem(getStorageKey(userId));
-    if (!raw) {
-      return createDefaultState();
-    }
+    if (!raw) return createDefaultState();
     const parsed = JSON.parse(raw);
     return {
       view: ["now", "day", "week", "month"].includes(parsed.view) ? parsed.view : "day",
@@ -145,9 +144,7 @@ function loadStateForUser(userId) {
 }
 
 function saveState() {
-  if (activeUserId) {
-    localStorage.setItem(getStorageKey(activeUserId), JSON.stringify(state));
-  }
+  if (activeUserId) localStorage.setItem(getStorageKey(activeUserId), JSON.stringify(state));
 }
 
 function handleSession(session) {
@@ -200,14 +197,21 @@ function bindEvents() {
   });
   singleAddForm.addEventListener("submit", handleSingleAdd);
   bulkAddForm.addEventListener("submit", handleBulkAdd);
+  singleTime.addEventListener("change", syncSingleEndMinimum);
+  bulkTime.addEventListener("change", syncBulkEndMinimum);
+  editorTime.addEventListener("change", syncEditorEndMinimum);
+  nowEditTime.addEventListener("change", syncNowEndMinimum);
   singleStartAfterButton.addEventListener("click", () => {
-    singleTime.value = String(findNextStartMinute(singleDate.value));
+    const start = findNextStartMinute(singleDate.value);
+    singleTime.value = String(start);
+    singleEndTime.value = String(defaultEndMinute(start));
   });
   bulkStartAfterButton.addEventListener("click", () => {
     const dayKeys = [...bulkDayPills.querySelectorAll("input:checked")].map((input) => input.value);
-    if (dayKeys.length) {
-      bulkTime.value = String(Math.max(...dayKeys.map(findNextStartMinute)));
-    }
+    if (!dayKeys.length) return;
+    const start = Math.max(...dayKeys.map(findNextStartMinute));
+    bulkTime.value = String(start);
+    bulkEndTime.value = String(defaultEndMinute(start));
   });
   editorForm.addEventListener("submit", handleEditorSave);
   duplicateEventButton.addEventListener("click", handleDuplicateEvent);
@@ -221,7 +225,6 @@ function bindEvents() {
   });
   nowEditSave.addEventListener("click", handleNowSave);
 }
-
 async function handleAuthSubmit(event) {
   event.preventDefault();
   authMessage.classList.add("hidden");
@@ -259,26 +262,20 @@ function buildTimeSelect(select) {
   }
 }
 
-function buildDurationSelect(select) {
-  if (!select) return;
-  select.innerHTML = "";
-  for (let duration = 15; duration <= 360; duration += 15) {
-    const option = document.createElement("option");
-    option.value = String(duration);
-    option.textContent = formatDuration(duration);
-    if (duration === 60) option.selected = true;
-    select.appendChild(option);
-  }
-}
-
 function normalizeEvent(event) {
+  const startMinute = typeof event.startMinute === "number" ? event.startMinute : (event.startHour || 9) * 60;
+  const endMinute = typeof event.endMinute === "number"
+    ? event.endMinute
+    : typeof event.durationMinutes === "number"
+      ? startMinute + event.durationMinutes
+      : startMinute + (event.duration || 1) * 60;
   return {
     id: event.id || crypto.randomUUID(),
     title: event.title || "",
     notes: event.notes || "",
     dateKey: event.dateKey || formatDateKey(today),
-    startMinute: typeof event.startMinute === "number" ? event.startMinute : (event.startHour || 9) * 60,
-    durationMinutes: typeof event.durationMinutes === "number" ? event.durationMinutes : (event.duration || 1) * 60,
+    startMinute,
+    endMinute: normalizeEndMinute(startMinute, endMinute),
     doing: Boolean(event.doing),
     done: Boolean(event.done),
   };
@@ -290,24 +287,25 @@ function seedStarterEvents() {
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
   state.events.push(
-    createEvent({ title: "Plan the day", notes: "Pick the top things first.", dateKey: todayKey, startMinute: 540, durationMinutes: 45 }),
-    createEvent({ title: "Focused work", notes: "Use this block for deep work.", dateKey: todayKey, startMinute: 795, durationMinutes: 90 }),
-    createEvent({ title: "Reset for tomorrow", notes: "Review and prep.", dateKey: formatDateKey(tomorrow), startMinute: 1200, durationMinutes: 30 })
+    createEvent({ title: "Plan the day", notes: "Pick the top things first.", dateKey: todayKey, startMinute: 540, endMinute: 585 }),
+    createEvent({ title: "Focused work", notes: "Use this block for deep work.", dateKey: todayKey, startMinute: 795, endMinute: 885 }),
+    createEvent({ title: "Reset for tomorrow", notes: "Review and prep.", dateKey: formatDateKey(tomorrow), startMinute: 1200, endMinute: 1230 })
   );
 }
 
-function createEvent({ title, notes, dateKey, startMinute, durationMinutes }) {
-  return { id: crypto.randomUUID(), title, notes, dateKey, startMinute, durationMinutes, doing: false, done: false };
+function createEvent({ title, notes, dateKey, startMinute, endMinute }) {
+  return { id: crypto.randomUUID(), title, notes, dateKey, startMinute, endMinute: normalizeEndMinute(startMinute, endMinute), doing: false, done: false };
 }
 
 function handleSingleAdd(event) {
   event.preventDefault();
   const title = singleTitle.value.trim();
   if (!title) return;
-  state.events.push(createEvent({ title, notes: singleNotes.value.trim(), dateKey: singleDate.value, startMinute: Number(singleTime.value), durationMinutes: Number(singleDuration.value) }));
+  const startMinute = Number(singleTime.value);
+  const endMinute = normalizeEndMinute(startMinute, Number(singleEndTime.value));
+  state.events.push(createEvent({ title, notes: singleNotes.value.trim(), dateKey: singleDate.value, startMinute, endMinute }));
   singleAddForm.reset();
-  singleTime.value = String(roundToStep(currentMinuteOfDay(), 5));
-  singleDuration.value = "60";
+  resetSingleForm();
   render();
 }
 
@@ -316,12 +314,12 @@ function handleBulkAdd(event) {
   const title = bulkTitle.value.trim();
   const dayKeys = [...bulkDayPills.querySelectorAll("input:checked")].map((input) => input.value);
   if (!title || !dayKeys.length) return;
+  const startMinute = Number(bulkTime.value);
+  const endMinute = normalizeEndMinute(startMinute, Number(bulkEndTime.value));
   dayKeys.forEach((dateKey) => {
-    state.events.push(createEvent({ title, notes: bulkNotes.value.trim(), dateKey, startMinute: Number(bulkTime.value), durationMinutes: Number(bulkDuration.value) }));
+    state.events.push(createEvent({ title, notes: bulkNotes.value.trim(), dateKey, startMinute, endMinute }));
   });
   bulkAddForm.reset();
-  bulkTime.value = String(roundToStep(currentMinuteOfDay(), 5));
-  bulkDuration.value = "60";
   render();
 }
 
@@ -332,7 +330,7 @@ function handleEditorSave(event) {
   selected.title = editorTitle.value.trim();
   selected.notes = editorNotes.value.trim();
   selected.startMinute = Number(editorTime.value);
-  selected.durationMinutes = Number(editorDuration.value);
+  selected.endMinute = normalizeEndMinute(selected.startMinute, Number(editorEndTime.value));
   selected.done = editorDone.checked;
   state.events.forEach((item) => { item.doing = editorDoing.checked ? item.id === selected.id : false; });
   if (!selected.title) deleteSelectedEvent();
@@ -342,26 +340,30 @@ function handleEditorSave(event) {
 function handleDuplicateEvent() {
   const selected = getSelectedEvent();
   if (!selected) return;
-  const copy = { ...selected, id: crypto.randomUUID(), title: `${selected.title} copy`, doing: false, done: false };
+  const offset = 5;
+  const copyStart = Math.min(selected.startMinute + offset, 1435);
+  const copyEnd = normalizeEndMinute(copyStart, Math.min(selected.endMinute + offset, 1435));
+  const copy = { ...selected, id: crypto.randomUUID(), title: `${selected.title} copy`, startMinute: copyStart, endMinute: copyEnd, doing: false, done: false };
   state.events.push(copy);
   state.selectedEventId = copy.id;
   render();
 }
 
 function handleNowSave() {
-  const current = getCurrentTask() || getSelectedEvent();
-  if (!current) return;
-  current.title = nowEditTitle.value.trim();
-  current.notes = nowEditNotes.value.trim();
-  current.startMinute = Number(nowEditTime.value);
-  current.durationMinutes = Number(nowEditDuration.value);
-  current.done = nowEditDone.checked;
-  state.events.forEach((event) => { event.doing = nowEditDoing.checked ? event.id === current.id : false; });
+  const activeDate = parseDateKey(state.currentDate);
+  const editable = getCurrentTask(activeDate) || getSelectedEvent() || getNextTask(activeDate);
+  if (!editable) return;
+  editable.title = nowEditTitle.value.trim();
+  editable.notes = nowEditNotes.value.trim();
+  editable.startMinute = Number(nowEditTime.value);
+  editable.endMinute = normalizeEndMinute(editable.startMinute, Number(nowEditEndTime.value));
+  editable.done = nowEditDone.checked;
+  state.events.forEach((entry) => { entry.doing = nowEditDoing.checked ? entry.id === editable.id : false; });
   render();
 }
 
 function deleteSelectedEvent() {
-  state.events = state.events.filter((event) => event.id !== state.selectedEventId);
+  state.events = state.events.filter((entry) => entry.id !== state.selectedEventId);
   state.selectedEventId = null;
 }
 
@@ -390,7 +392,6 @@ function render() {
   renderEditor();
   saveState();
 }
-
 function applyTheme() {
   document.body.dataset.theme = state.theme || "classic";
   themeSelect.value = state.theme || "classic";
@@ -432,6 +433,7 @@ function renderDateOptions() {
     option.selected = isSameDate(date, activeDate);
     singleDate.appendChild(option);
   });
+  resetSingleForm();
 }
 
 function renderBulkDayPills() {
@@ -450,10 +452,13 @@ function renderBulkDayPills() {
     label.append(input, text);
     bulkDayPills.appendChild(label);
   });
+  const start = roundToStep(currentMinuteOfDay(), 5);
+  bulkTime.value = String(start);
+  bulkEndTime.value = String(defaultEndMinute(start));
 }
 
 function renderFocus() {
-  const current = state.events.find((event) => event.doing);
+  const current = state.events.find((entry) => entry.doing);
   if (!current) {
     currentFocusTitle.textContent = "Nothing checked yet";
     currentFocusMeta.textContent = "Mark an event as your current focus and it will show up here.";
@@ -461,7 +466,7 @@ function renderFocus() {
   }
   const date = parseDateKey(current.dateKey);
   currentFocusTitle.textContent = current.title || "Untitled event";
-  currentFocusMeta.textContent = `${weekdayLabels[date.getDay()]} ${monthShortFormatter.format(date)} at ${formatMinuteOfDay(current.startMinute)}${current.notes ? ` • ${current.notes}` : ""}`;
+  currentFocusMeta.textContent = `${weekdayLabels[date.getDay()]} ${monthShortFormatter.format(date)} at ${formatMinuteOfDay(current.startMinute)}-${formatMinuteOfDay(current.endMinute)}${current.notes ? ` â€¢ ${current.notes}` : ""}`;
 }
 
 function renderPanels() {
@@ -493,7 +498,7 @@ function renderDayView(activeDate) {
     lane.addEventListener("dragover", (event) => handleSlotDragOver(event, lane));
     lane.addEventListener("dragleave", () => lane.classList.remove("is-drop-target"));
     lane.addEventListener("drop", (event) => handleSlotDrop(event, dateKey, hour * 60, lane));
-    getEventsForDate(dateKey).filter((event) => Math.floor(event.startMinute / 60) === hour).sort(sortEvents).forEach((event) => lane.appendChild(createEventChip(event)));
+    getEventsForDate(dateKey).filter((entry) => Math.floor(entry.startMinute / 60) === hour).sort(sortEvents).forEach((entry) => lane.appendChild(createEventChip(entry)));
     row.append(time, lane);
     wrapper.appendChild(row);
   }
@@ -537,13 +542,12 @@ function renderWeekView(activeDate) {
       cell.addEventListener("dragover", (event) => handleSlotDragOver(event, cell));
       cell.addEventListener("dragleave", () => cell.classList.remove("is-drop-target"));
       cell.addEventListener("drop", (event) => handleSlotDrop(event, dateKey, hour * 60, cell));
-      getEventsForDate(dateKey).filter((event) => Math.floor(event.startMinute / 60) === hour).sort(sortEvents).forEach((event) => cell.appendChild(createEventChip(event)));
+      getEventsForDate(dateKey).filter((entry) => Math.floor(entry.startMinute / 60) === hour).sort(sortEvents).forEach((entry) => cell.appendChild(createEventChip(entry)));
       grid.appendChild(cell);
     });
   }
   weekView.append(header, grid);
 }
-
 function renderMonthView(activeDate) {
   monthView.innerHTML = "";
   const dates = getMonthGridDates(activeDate);
@@ -569,10 +573,10 @@ function renderMonthView(activeDate) {
     badge.className = "month-date";
     badge.textContent = String(date.getDate());
     cell.appendChild(badge);
-    getEventsForDate(dateKey).sort(sortEvents).slice(0, 3).forEach((event) => {
+    getEventsForDate(dateKey).sort(sortEvents).slice(0, 3).forEach((entry) => {
       const item = document.createElement("div");
       item.className = "month-event";
-      item.textContent = `${formatMinuteOfDay(event.startMinute)} ${event.title}`;
+      item.textContent = `${formatMinuteOfDay(entry.startMinute)} ${entry.title}`;
       cell.appendChild(item);
     });
     const overflow = getEventsForDate(dateKey).length - 3;
@@ -593,53 +597,93 @@ function renderMonthView(activeDate) {
 }
 
 function renderNowView(activeDate) {
-  const current = getCurrentTask() || state.events.find((event) => event.doing) || null;
-  nowEditToggle.textContent = state.nowEditing ? "Close editing mode" : "Editing mode";
-  nowInlineEditor.classList.toggle("hidden", !state.nowEditing || !current);
+  const current = getCurrentTask(activeDate);
+  const selected = getSelectedEvent();
+  const editable = current || selected || getNextTask(activeDate) || null;
+  nowEditToggle.textContent = state.nowEditing ? "Close editing mode" : "Edit schedule";
+  nowInlineEditor.classList.toggle("hidden", !state.nowEditing || !editable);
+  nowSchedulePanel.classList.toggle("hidden", !state.nowEditing);
   if (!current) {
     nowSummaryTitle.textContent = "Nothing scheduled right now";
     nowSummaryTime.textContent = `${weekdayLabels[activeDate.getDay()]} ${monthLongFormatter.format(activeDate)}`;
-    nowSummaryNotes.textContent = "Use day or week view to line up the next thing.";
+    const next = getNextTask(activeDate);
+    nowSummaryNotes.textContent = next ? `Next up: ${next.title} at ${formatMinuteOfDay(next.startMinute)}` : "Your schedule will adapt here as soon as you add tasks.";
     nowSummaryEmpty.classList.remove("hidden");
-    return;
+  } else {
+    nowSummaryTitle.textContent = current.title || "Untitled event";
+    nowSummaryTime.textContent = `${formatMinuteOfDay(current.startMinute)} - ${formatMinuteOfDay(current.endMinute)}`;
+    nowSummaryNotes.textContent = current.notes || "No extra notes for this task.";
+    nowSummaryEmpty.classList.add("hidden");
   }
-  nowSummaryTitle.textContent = current.title || "Untitled event";
-  nowSummaryTime.textContent = `${formatMinuteOfDay(current.startMinute)} - ${formatMinuteOfDay(current.startMinute + current.durationMinutes)}`;
-  nowSummaryNotes.textContent = current.notes || "No extra notes for this task.";
-  nowSummaryEmpty.classList.add("hidden");
-  nowEditTitle.value = current.title;
-  nowEditNotes.value = current.notes;
-  nowEditTime.value = String(current.startMinute);
-  nowEditDuration.value = String(current.durationMinutes);
-  nowEditDoing.checked = current.doing;
-  nowEditDone.checked = current.done;
+  if (editable) {
+    nowEditTitle.value = editable.title;
+    nowEditNotes.value = editable.notes;
+    nowEditTime.value = String(editable.startMinute);
+    nowEditEndTime.value = String(editable.endMinute);
+    nowEditDoing.checked = editable.doing;
+    nowEditDone.checked = editable.done;
+    syncNowEndMinimum();
+  }
+  renderNowSchedule(activeDate, current, selected);
 }
 
-function getCurrentTask() {
-  const dateKey = formatDateKey(today);
+function renderNowSchedule(activeDate, current, selected) {
+  nowScheduleList.innerHTML = "";
+  const dateKey = formatDateKey(activeDate);
+  const entries = getEventsForDate(dateKey).sort(sortEvents);
+  if (!entries.length) {
+    const empty = document.createElement("p");
+    empty.className = "subtle";
+    empty.textContent = "No tasks scheduled for this day yet.";
+    nowScheduleList.appendChild(empty);
+    return;
+  }
+  entries.forEach((entry) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "now-schedule-item";
+    if (current?.id === entry.id) button.classList.add("is-current");
+    if (selected?.id === entry.id) button.classList.add("is-selected");
+    button.innerHTML = `<strong>${entry.title || "Untitled event"}</strong><span>${formatMinuteOfDay(entry.startMinute)} - ${formatMinuteOfDay(entry.endMinute)}</span>`;
+    button.addEventListener("click", () => {
+      state.selectedEventId = entry.id;
+      render();
+    });
+    nowScheduleList.appendChild(button);
+  });
+}
+
+function getCurrentTask(activeDate = today) {
+  const dateKey = formatDateKey(activeDate);
   const minute = currentMinuteOfDay();
-  return getEventsForDate(dateKey).sort(sortEvents).find((event) => minute >= event.startMinute && minute < event.startMinute + event.durationMinutes) || null;
+  return getEventsForDate(dateKey).sort(sortEvents).find((entry) => minute >= entry.startMinute && minute < entry.endMinute) || null;
+}
+
+function getNextTask(activeDate = today) {
+  const dateKey = formatDateKey(activeDate);
+  const minute = currentMinuteOfDay();
+  return getEventsForDate(dateKey).sort(sortEvents).find((entry) => entry.startMinute > minute) || null;
 }
 
 function createAtSlot(dateKey, startMinute) {
-  const event = createEvent({ title: "New event", notes: "", dateKey, startMinute, durationMinutes: 60 });
-  state.events.push(event);
-  state.selectedEventId = event.id;
+  const entry = createEvent({ title: "New event", notes: "", dateKey, startMinute, endMinute: defaultEndMinute(startMinute) });
+  state.events.push(entry);
+  state.selectedEventId = entry.id;
   render();
 }
 
-function createEventChip(event) {
+function createEventChip(entry) {
   const fragment = eventChipTemplate.content.cloneNode(true);
   const chip = fragment.querySelector(".event-chip");
-  fragment.querySelector(".event-chip-time").textContent = `${formatMinuteOfDay(event.startMinute)} • ${formatDuration(event.durationMinutes)}`;
-  fragment.querySelector(".event-chip-title").textContent = event.title || "Untitled";
-  fragment.querySelector(".event-chip-notes").textContent = event.notes || "";
-  chip.classList.toggle("is-doing", event.doing);
-  chip.classList.toggle("is-done", event.done);
-  chip.classList.toggle("is-selected", state.selectedEventId === event.id);
+  fragment.querySelector(".event-chip-time").textContent = `${formatMinuteOfDay(entry.startMinute)} - ${formatMinuteOfDay(entry.endMinute)}`;
+  fragment.querySelector(".event-chip-title").textContent = entry.title || "Untitled";
+  fragment.querySelector(".event-chip-notes").textContent = entry.notes || "";
+  chip.classList.toggle("is-doing", entry.doing);
+  chip.classList.toggle("is-done", entry.done);
+  chip.classList.toggle("is-selected", state.selectedEventId === entry.id);
   chip.draggable = true;
   chip.addEventListener("dragstart", () => {
-    draggedEventId = event.id;
+    draggedEventId = entry.id;
     chip.classList.add("is-dragging");
   });
   chip.addEventListener("dragend", () => {
@@ -649,7 +693,7 @@ function createEventChip(event) {
   });
   chip.addEventListener("click", (clickEvent) => {
     clickEvent.stopPropagation();
-    state.selectedEventId = event.id;
+    state.selectedEventId = entry.id;
     render();
   });
   return fragment;
@@ -663,17 +707,17 @@ function renderEditor() {
   editorTitle.value = selected.title;
   editorNotes.value = selected.notes;
   editorTime.value = String(selected.startMinute);
-  editorDuration.value = String(selected.durationMinutes);
+  editorEndTime.value = String(selected.endMinute);
   editorDoing.checked = selected.doing;
   editorDone.checked = selected.done;
+  syncEditorEndMinimum();
 }
-
 function getSelectedEvent() {
-  return state.events.find((event) => event.id === state.selectedEventId) || null;
+  return state.events.find((entry) => entry.id === state.selectedEventId) || null;
 }
 
 function getEventsForDate(dateKey) {
-  return state.events.filter((event) => event.dateKey === dateKey);
+  return state.events.filter((entry) => entry.dateKey === dateKey);
 }
 
 function sortEvents(a, b) {
@@ -711,17 +755,55 @@ function handleSlotDrop(event, dateKey, startMinute, element) {
   element.classList.remove("is-drop-target");
   const dragged = state.events.find((item) => item.id === draggedEventId);
   if (!dragged) return;
+  const length = dragged.endMinute - dragged.startMinute;
   dragged.dateKey = dateKey;
   dragged.startMinute = startMinute;
+  dragged.endMinute = normalizeEndMinute(startMinute, startMinute + length);
   state.selectedEventId = dragged.id;
   render();
 }
 
 function findNextStartMinute(dateKey) {
-  const events = getEventsForDate(dateKey);
-  if (!events.length) return roundToStep(currentMinuteOfDay(), 5);
-  const latest = Math.max(...events.map((event) => event.startMinute + event.durationMinutes));
+  const entries = getEventsForDate(dateKey);
+  if (!entries.length) return roundToStep(currentMinuteOfDay(), 5);
+  const latest = Math.max(...entries.map((entry) => entry.endMinute));
   return Math.min(roundToStep(latest, 5), 1435);
+}
+
+function syncSingleEndMinimum() {
+  singleEndTime.value = String(normalizeEndMinute(Number(singleTime.value), Number(singleEndTime.value || defaultEndMinute(Number(singleTime.value)))));
+}
+
+function syncBulkEndMinimum() {
+  bulkEndTime.value = String(normalizeEndMinute(Number(bulkTime.value), Number(bulkEndTime.value || defaultEndMinute(Number(bulkTime.value)))));
+}
+
+function syncEditorEndMinimum() {
+  editorEndTime.value = String(normalizeEndMinute(Number(editorTime.value), Number(editorEndTime.value || defaultEndMinute(Number(editorTime.value)))));
+}
+
+function syncNowEndMinimum() {
+  nowEditEndTime.value = String(normalizeEndMinute(Number(nowEditTime.value), Number(nowEditEndTime.value || defaultEndMinute(Number(nowEditTime.value)))));
+}
+
+function defaultEndMinute(startMinute) {
+  return normalizeEndMinute(startMinute, startMinute + 60);
+}
+
+function normalizeEndMinute(startMinute, endMinute) {
+  const safeStart = clampMinute(startMinute);
+  const safeEnd = clampMinute(endMinute);
+  return safeEnd <= safeStart ? Math.min(safeStart + 5, 1435) : safeEnd;
+}
+
+function clampMinute(value) {
+  return Math.max(0, Math.min(1435, Number.isFinite(value) ? value : 0));
+}
+
+function resetSingleForm() {
+  const start = roundToStep(currentMinuteOfDay(), 5);
+  if (singleTime) singleTime.value = String(start);
+  if (singleEndTime) singleEndTime.value = String(defaultEndMinute(start));
 }
 
 function formatHour(hour) {
@@ -735,14 +817,6 @@ function formatMinuteOfDay(totalMinutes) {
   const suffix = hour >= 12 ? "PM" : "AM";
   const normalized = hour % 12 === 0 ? 12 : hour % 12;
   return `${normalized}:${String(minute).padStart(2, "0")} ${suffix}`;
-}
-
-function formatDuration(durationMinutes) {
-  const hours = Math.floor(durationMinutes / 60);
-  const minutes = durationMinutes % 60;
-  if (hours && minutes) return `${hours}h ${minutes}m`;
-  if (hours) return `${hours}h`;
-  return `${minutes}m`;
 }
 
 function currentMinuteOfDay() {
