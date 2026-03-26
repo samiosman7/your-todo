@@ -29,6 +29,7 @@ const mainHeading = document.getElementById("main-heading");
 const rangeLabel = document.getElementById("range-label");
 const viewTitle = document.getElementById("view-title");
 const viewSwitcher = document.getElementById("view-switcher");
+const themeSelect = document.getElementById("theme-select");
 const prevButton = document.getElementById("prev-button");
 const nextButton = document.getElementById("next-button");
 const todayButton = document.getElementById("today-button");
@@ -66,6 +67,7 @@ const eventChipTemplate = document.getElementById("event-chip-template");
 let supabase = null;
 let state = createDefaultState();
 let activeUserId = null;
+let draggedEventId = null;
 
 buildHourSelect(singleHour);
 buildHourSelect(bulkHour);
@@ -145,6 +147,7 @@ function handleSession(session) {
 function createDefaultState() {
   return {
     view: "day",
+    theme: "classic",
     currentDate: formatDateKey(today),
     events: [],
     selectedEventId: null,
@@ -165,6 +168,7 @@ function loadStateForUser(userId) {
     const parsed = JSON.parse(raw);
     return {
       view: ["day", "week", "month"].includes(parsed.view) ? parsed.view : "day",
+      theme: ["classic", "midnight", "paper"].includes(parsed.theme) ? parsed.theme : "classic",
       currentDate: parsed.currentDate || formatDateKey(today),
       events: Array.isArray(parsed.events) ? parsed.events : [],
       selectedEventId: parsed.selectedEventId || null,
@@ -186,6 +190,11 @@ function bindEvents() {
   authForm.addEventListener("submit", handleAuthSubmit);
   googleSignInButton.addEventListener("click", handleGoogleSignIn);
   signOutButton.addEventListener("click", handleSignOut);
+  themeSelect.addEventListener("change", () => {
+    state.theme = themeSelect.value;
+    applyTheme();
+    saveState();
+  });
 
   viewSwitcher.addEventListener("click", (event) => {
     const button = event.target.closest("[data-view]");
@@ -442,6 +451,7 @@ function shiftRange(step) {
 
 function render() {
   const activeDate = parseDateKey(state.currentDate);
+  applyTheme();
   renderHeaderLabels(activeDate);
   renderViewSwitcher();
   renderDateOptions();
@@ -453,6 +463,11 @@ function render() {
   renderMonthView(activeDate);
   renderEditor();
   saveState();
+}
+
+function applyTheme() {
+  document.body.dataset.theme = state.theme || "classic";
+  themeSelect.value = state.theme || "classic";
 }
 
 function renderHeaderLabels(activeDate) {
@@ -568,6 +583,11 @@ function renderDayView(activeDate) {
     const lane = document.createElement("div");
     lane.className = "hour-lane";
     lane.addEventListener("click", () => createAtSlot(formatDateKey(activeDate), hour));
+    lane.addEventListener("dragover", (event) => handleSlotDragOver(event, lane));
+    lane.addEventListener("dragleave", () => lane.classList.remove("is-drop-target"));
+    lane.addEventListener("drop", (event) =>
+      handleSlotDrop(event, formatDateKey(activeDate), hour, lane)
+    );
 
     getEventsForDate(formatDateKey(activeDate))
       .filter((event) => event.startHour === hour)
@@ -623,6 +643,11 @@ function renderWeekView(activeDate) {
         cell.classList.add("is-now");
       }
       cell.addEventListener("click", () => createAtSlot(formatDateKey(date), hour));
+      cell.addEventListener("dragover", (event) => handleSlotDragOver(event, cell));
+      cell.addEventListener("dragleave", () => cell.classList.remove("is-drop-target"));
+      cell.addEventListener("drop", (event) =>
+        handleSlotDrop(event, formatDateKey(date), hour, cell)
+      );
 
       getEventsForDate(formatDateKey(date))
         .filter((event) => event.startHour === hour)
@@ -727,6 +752,16 @@ function createEventChip(event) {
   chip.classList.toggle("is-doing", event.doing);
   chip.classList.toggle("is-done", event.done);
   chip.classList.toggle("is-selected", state.selectedEventId === event.id);
+  chip.draggable = true;
+  chip.addEventListener("dragstart", () => {
+    draggedEventId = event.id;
+    chip.classList.add("is-dragging");
+  });
+  chip.addEventListener("dragend", () => {
+    draggedEventId = null;
+    chip.classList.remove("is-dragging");
+    document.querySelectorAll(".is-drop-target").forEach((node) => node.classList.remove("is-drop-target"));
+  });
   chip.addEventListener("click", (clickEvent) => {
     clickEvent.stopPropagation();
     state.selectedEventId = event.id;
@@ -839,4 +874,32 @@ function isSameDate(a, b) {
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
   );
+}
+
+function handleSlotDragOver(event, element) {
+  if (!draggedEventId) {
+    return;
+  }
+
+  event.preventDefault();
+  element.classList.add("is-drop-target");
+}
+
+function handleSlotDrop(event, dateKey, hour, element) {
+  if (!draggedEventId) {
+    return;
+  }
+
+  event.preventDefault();
+  element.classList.remove("is-drop-target");
+
+  const dragged = state.events.find((item) => item.id === draggedEventId);
+  if (!dragged) {
+    return;
+  }
+
+  dragged.dateKey = dateKey;
+  dragged.startHour = hour;
+  state.selectedEventId = dragged.id;
+  render();
 }
