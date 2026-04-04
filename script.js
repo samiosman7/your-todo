@@ -28,6 +28,7 @@ const themeSelect = document.getElementById("theme-select");
 const prevButton = document.getElementById("prev-button");
 const nextButton = document.getElementById("next-button");
 const todayButton = document.getElementById("today-button");
+const dateNavButtons = document.querySelector(".nav-buttons");
 const jumpToDayButton = document.getElementById("jump-to-day-button");
 const currentFocusTitle = document.getElementById("current-focus-title");
 const currentFocusMeta = document.getElementById("current-focus-meta");
@@ -117,7 +118,7 @@ function createDefaultState() {
   return {
     view: pageView,
     theme: "classic",
-    currentDate: queryDate || formatDateKey(today),
+    currentDate: pageView === "now" ? formatDateKey(today) : (queryDate || formatDateKey(today)),
     nowEditing: false,
     events: [],
     selectedEventId: null,
@@ -136,7 +137,7 @@ function loadStateForUser(userId) {
     return {
       view: pageView,
       theme: ["classic", "midnight", "obsidian", "paper"].includes(parsed.theme) ? parsed.theme : "classic",
-      currentDate: getQueryDate() || parsed.currentDate || formatDateKey(today),
+      currentDate: pageView === "now" ? formatDateKey(today) : (getQueryDate() || parsed.currentDate || formatDateKey(today)),
       nowEditing: Boolean(parsed.nowEditing),
       events: Array.isArray(parsed.events) ? parsed.events.map(normalizeEvent) : [],
       selectedEventId: parsed.selectedEventId || null,
@@ -388,6 +389,9 @@ function shiftRange(step) {
 
 function render() {
   state.view = pageView;
+  if (pageView === "now") {
+    state.currentDate = formatDateKey(today);
+  }
   const activeDate = parseDateKey(state.currentDate);
   applyTheme();
   renderHeaderLabels(activeDate);
@@ -439,20 +443,31 @@ function renderViewSwitcher() {
 function renderDateOptions() {
   const activeDate = parseDateKey(state.currentDate);
   const weekDates = getWeekDates(activeDate);
+  const previousDate = singleDate.value;
+  const previousStart = singleTime.value;
+  const previousEnd = singleEndTime.value;
   singleDate.innerHTML = "";
   weekDates.forEach((date) => {
     const option = document.createElement("option");
     option.value = formatDateKey(date);
     option.textContent = `${weekdayLabels[date.getDay()]} ${monthShortFormatter.format(date)}`;
-    option.selected = isSameDate(date, activeDate);
     singleDate.appendChild(option);
   });
-  resetSingleForm();
+  const availableDates = weekDates.map(formatDateKey);
+  singleDate.value = availableDates.includes(previousDate) ? previousDate : formatDateKey(activeDate);
+  singleTime.value = previousStart || String(roundToStep(currentMinuteOfDay(), 5));
+  singleEndTime.value = previousEnd || String(defaultEndMinute(Number(singleTime.value)));
+  syncSingleEndMinimum();
 }
 
 function renderBulkDayPills() {
   const activeDate = parseDateKey(state.currentDate);
   const weekDates = getWeekDates(activeDate);
+  const previousChecked = new Set(
+    [...bulkDayPills.querySelectorAll("input:checked")].map((input) => input.value)
+  );
+  const previousStart = bulkTime.value;
+  const previousEnd = bulkEndTime.value;
   bulkDayPills.innerHTML = "";
   weekDates.forEach((date) => {
     const label = document.createElement("label");
@@ -460,15 +475,18 @@ function renderBulkDayPills() {
     const input = document.createElement("input");
     input.type = "checkbox";
     input.value = formatDateKey(date);
-    input.checked = isSameDate(date, activeDate);
+    input.checked = previousChecked.size
+      ? previousChecked.has(input.value)
+      : isSameDate(date, activeDate);
     const text = document.createElement("span");
     text.textContent = weekdayLabels[date.getDay()];
     label.append(input, text);
     bulkDayPills.appendChild(label);
   });
-  const start = roundToStep(currentMinuteOfDay(), 5);
-  bulkTime.value = String(start);
-  bulkEndTime.value = String(defaultEndMinute(start));
+  const start = previousStart || String(roundToStep(currentMinuteOfDay(), 5));
+  bulkTime.value = start;
+  bulkEndTime.value = previousEnd || String(defaultEndMinute(Number(start)));
+  syncBulkEndMinimum();
 }
 
 function renderFocus() {
@@ -485,6 +503,7 @@ function renderFocus() {
 
 function renderPanels() {
   bulkAddPanel.classList.toggle("hidden", pageView !== "week");
+  dateNavButtons.classList.toggle("hidden", pageView === "now");
   jumpToDayButton.classList.toggle("hidden", pageView !== "week");
   dayView.classList.toggle("hidden", pageView !== "day");
   weekView.classList.toggle("hidden", pageView !== "week");
