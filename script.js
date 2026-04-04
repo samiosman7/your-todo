@@ -30,6 +30,7 @@ const todayButton = document.getElementById("today-button");
 const jumpToDayButton = document.getElementById("jump-to-day-button");
 const currentFocusTitle = document.getElementById("current-focus-title");
 const currentFocusMeta = document.getElementById("current-focus-meta");
+const blockTemplates = [...document.querySelectorAll(".block-template")];
 const singleAddForm = document.getElementById("single-add-form");
 const singleTitle = document.getElementById("single-title");
 const singleNotes = document.getElementById("single-notes");
@@ -79,7 +80,7 @@ const eventChipTemplate = document.getElementById("event-chip-template");
 let supabase = null;
 let state = createDefaultState();
 let activeUserId = null;
-let draggedEventId = null;
+let draggedItem = null;
 
 [singleTime, singleEndTime, bulkTime, bulkEndTime, editorTime, editorEndTime, nowEditTime, nowEditEndTime].forEach(buildTimeSelect);
 bindEvents();
@@ -212,6 +213,21 @@ function bindEvents() {
     const start = Math.max(...dayKeys.map(findNextStartMinute));
     bulkTime.value = String(start);
     bulkEndTime.value = String(defaultEndMinute(start));
+  });
+  blockTemplates.forEach((template) => {
+    template.addEventListener("dragstart", () => {
+      draggedItem = {
+        type: "block",
+        duration: Number(template.dataset.blockDuration),
+        title: template.dataset.blockTitle || "New block",
+      };
+      template.classList.add("is-dragging");
+    });
+    template.addEventListener("dragend", () => {
+      draggedItem = null;
+      template.classList.remove("is-dragging");
+      document.querySelectorAll(".is-drop-target").forEach((node) => node.classList.remove("is-drop-target"));
+    });
   });
   editorForm.addEventListener("submit", handleEditorSave);
   duplicateEventButton.addEventListener("click", handleDuplicateEvent);
@@ -672,6 +688,19 @@ function createAtSlot(dateKey, startMinute) {
   render();
 }
 
+function createBlockAtSlot(dateKey, startMinute, duration, title) {
+  const entry = createEvent({
+    title: title || "New block",
+    notes: "",
+    dateKey,
+    startMinute,
+    endMinute: normalizeEndMinute(startMinute, startMinute + duration),
+  });
+  state.events.push(entry);
+  state.selectedEventId = entry.id;
+  render();
+}
+
 function createEventChip(entry) {
   const fragment = eventChipTemplate.content.cloneNode(true);
   const chip = fragment.querySelector(".event-chip");
@@ -683,11 +712,11 @@ function createEventChip(entry) {
   chip.classList.toggle("is-selected", state.selectedEventId === entry.id);
   chip.draggable = true;
   chip.addEventListener("dragstart", () => {
-    draggedEventId = entry.id;
+    draggedItem = { type: "event", id: entry.id };
     chip.classList.add("is-dragging");
   });
   chip.addEventListener("dragend", () => {
-    draggedEventId = null;
+    draggedItem = null;
     chip.classList.remove("is-dragging");
     document.querySelectorAll(".is-drop-target").forEach((node) => node.classList.remove("is-drop-target"));
   });
@@ -744,16 +773,20 @@ function getMonthGridDates(date) {
 }
 
 function handleSlotDragOver(event, element) {
-  if (!draggedEventId) return;
+  if (!draggedItem) return;
   event.preventDefault();
   element.classList.add("is-drop-target");
 }
 
 function handleSlotDrop(event, dateKey, startMinute, element) {
-  if (!draggedEventId) return;
+  if (!draggedItem) return;
   event.preventDefault();
   element.classList.remove("is-drop-target");
-  const dragged = state.events.find((item) => item.id === draggedEventId);
+  if (draggedItem.type === "block") {
+    createBlockAtSlot(dateKey, startMinute, draggedItem.duration, draggedItem.title);
+    return;
+  }
+  const dragged = state.events.find((item) => item.id === draggedItem.id);
   if (!dragged) return;
   const length = dragged.endMinute - dragged.startMinute;
   dragged.dateKey = dateKey;
