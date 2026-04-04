@@ -228,7 +228,7 @@
       <main class="calendar-main">
         <header class="topbar">
           <div class="topbar-primary">
-            <div>
+            <div class="topbar-title">
               <p class="eyebrow">Planner</p>
               <h2 id="view-title">Day view</h2>
             </div>
@@ -240,23 +240,27 @@
             </nav>
           </div>
           <div class="topbar-actions">
-            <div class="nav-buttons">
-              <button type="button" class="ghost-button" id="prev-button">Previous</button>
-              <button type="button" class="ghost-button" id="today-button">Today</button>
-              <button type="button" class="ghost-button" id="next-button">Next</button>
+            <div class="topbar-controls">
+              <div class="nav-buttons">
+                <button type="button" class="ghost-button" id="prev-button">Previous</button>
+                <button type="button" class="ghost-button" id="today-button">Today</button>
+                <button type="button" class="ghost-button" id="next-button">Next</button>
+              </div>
+              <button type="button" class="ghost-button" id="jump-to-day-button">Open selected day</button>
             </div>
-            <label class="theme-picker topbar-theme">
-              UI style
-              <select id="theme-select">
-                <option value="classic">Classic</option>
-                <option value="midnight">Midnight</option>
-                <option value="obsidian">Obsidian</option>
-                <option value="paper">Paper</option>
-              </select>
-            </label>
-            <button type="button" class="ghost-button" id="jump-to-day-button">Open selected day</button>
-            <span id="user-email" class="user-email"></span>
-            <button type="button" class="ghost-button" id="sign-out-button">Sign out</button>
+            <div class="topbar-account">
+              <label class="theme-picker topbar-theme">
+                UI style
+                <select id="theme-select">
+                  <option value="classic">Classic</option>
+                  <option value="midnight">Midnight</option>
+                  <option value="obsidian">Obsidian</option>
+                  <option value="paper">Paper</option>
+                </select>
+              </label>
+              <span id="user-email" class="user-email"></span>
+              <button type="button" class="ghost-button" id="sign-out-button">Sign out</button>
+            </div>
           </div>
         </header>
 
