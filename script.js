@@ -508,9 +508,6 @@ function renderDayView(activeDate) {
     time.textContent = formatHour(hour);
     const lane = document.createElement("div");
     lane.className = "hour-lane";
-    lane.addEventListener("click", (event) => {
-      if (event.target === lane) createAtSlot(dateKey, hour * 60);
-    });
     lane.addEventListener("dragover", (event) => handleSlotDragOver(event, lane));
     lane.addEventListener("dragleave", () => lane.classList.remove("is-drop-target"));
     lane.addEventListener("drop", (event) => handleSlotDrop(event, dateKey, hour * 60, lane));
@@ -552,9 +549,6 @@ function renderWeekView(activeDate) {
       const cell = document.createElement("div");
       cell.className = "week-cell";
       if (isSameDate(date, today) && hour === new Date().getHours()) cell.classList.add("is-now");
-      cell.addEventListener("click", (event) => {
-        if (event.target === cell) createAtSlot(dateKey, hour * 60);
-      });
       cell.addEventListener("dragover", (event) => handleSlotDragOver(event, cell));
       cell.addEventListener("dragleave", () => cell.classList.remove("is-drop-target"));
       cell.addEventListener("drop", (event) => handleSlotDrop(event, dateKey, hour * 60, cell));
