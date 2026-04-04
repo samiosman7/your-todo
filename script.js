@@ -9,6 +9,7 @@ const today = startOfDay(new Date());
 const supabaseUrl = normalizeSupabaseUrl(import.meta.env.VITE_SUPABASE_URL);
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
+const pageView = getPageView();
 
 const authShell = document.getElementById("auth-shell");
 const appShell = document.getElementById("app-shell");
@@ -112,10 +113,11 @@ function showFatalError(message) {
 }
 
 function createDefaultState() {
+  const queryDate = getQueryDate();
   return {
-    view: "day",
+    view: pageView,
     theme: "classic",
-    currentDate: formatDateKey(today),
+    currentDate: queryDate || formatDateKey(today),
     nowEditing: false,
     events: [],
     selectedEventId: null,
@@ -132,9 +134,9 @@ function loadStateForUser(userId) {
     if (!raw) return createDefaultState();
     const parsed = JSON.parse(raw);
     return {
-      view: ["now", "day", "week", "month"].includes(parsed.view) ? parsed.view : "day",
+      view: pageView,
       theme: ["classic", "midnight", "obsidian", "paper"].includes(parsed.theme) ? parsed.theme : "classic",
-      currentDate: parsed.currentDate || formatDateKey(today),
+      currentDate: getQueryDate() || parsed.currentDate || formatDateKey(today),
       nowEditing: Boolean(parsed.nowEditing),
       events: Array.isArray(parsed.events) ? parsed.events.map(normalizeEvent) : [],
       selectedEventId: parsed.selectedEventId || null,
@@ -179,22 +181,14 @@ function bindEvents() {
     applyTheme();
     saveState();
   });
-  viewSwitcher.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-view]");
-    if (!button) return;
-    state.view = button.dataset.view;
-    state.selectedEventId = null;
-    render();
-  });
   prevButton.addEventListener("click", () => shiftRange(-1));
   nextButton.addEventListener("click", () => shiftRange(1));
   todayButton.addEventListener("click", () => {
     state.currentDate = formatDateKey(today);
-    render();
+    navigateToView(pageView, state.currentDate);
   });
   jumpToDayButton.addEventListener("click", () => {
-    state.view = "day";
-    render();
+    navigateToView("day", state.currentDate);
   });
   singleAddForm.addEventListener("submit", handleSingleAdd);
   bulkAddForm.addEventListener("submit", handleBulkAdd);
@@ -385,14 +379,15 @@ function deleteSelectedEvent() {
 
 function shiftRange(step) {
   const current = parseDateKey(state.currentDate);
-  if (state.view === "day" || state.view === "now") current.setDate(current.getDate() + step);
-  else if (state.view === "week") current.setDate(current.getDate() + step * 7);
+  if (pageView === "day" || pageView === "now") current.setDate(current.getDate() + step);
+  else if (pageView === "week") current.setDate(current.getDate() + step * 7);
   else current.setMonth(current.getMonth() + step, 1);
   state.currentDate = formatDateKey(current);
-  render();
+  navigateToView(pageView, state.currentDate);
 }
 
 function render() {
+  state.view = pageView;
   const activeDate = parseDateKey(state.currentDate);
   applyTheme();
   renderHeaderLabels(activeDate);
@@ -415,15 +410,15 @@ function applyTheme() {
 
 function renderHeaderLabels(activeDate) {
   const weekDates = getWeekDates(activeDate);
-  if (state.view === "day") {
+  if (pageView === "day") {
     mainHeading.textContent = "Today";
     viewTitle.textContent = `${weekdayLabels[activeDate.getDay()]} view`;
     rangeLabel.textContent = `${weekdayLabels[activeDate.getDay()]} ${monthLongFormatter.format(activeDate)}`;
-  } else if (state.view === "week") {
+  } else if (pageView === "week") {
     mainHeading.textContent = "Week";
     viewTitle.textContent = "Week view";
     rangeLabel.textContent = `${monthShortFormatter.format(weekDates[0])} - ${monthShortFormatter.format(weekDates[6])}`;
-  } else if (state.view === "month") {
+  } else if (pageView === "month") {
     mainHeading.textContent = "Month";
     viewTitle.textContent = "Month view";
     rangeLabel.textContent = activeDate.toLocaleDateString(undefined, { month: "long", year: "numeric" });
@@ -435,7 +430,10 @@ function renderHeaderLabels(activeDate) {
 }
 
 function renderViewSwitcher() {
-  [...viewSwitcher.querySelectorAll("[data-view]")].forEach((button) => button.classList.toggle("is-active", button.dataset.view === state.view));
+  [...viewSwitcher.querySelectorAll("[data-view]")].forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.view === pageView);
+    button.href = getViewUrl(button.dataset.view, state.currentDate);
+  });
 }
 
 function renderDateOptions() {
@@ -486,12 +484,12 @@ function renderFocus() {
 }
 
 function renderPanels() {
-  bulkAddPanel.classList.toggle("hidden", state.view !== "week");
-  jumpToDayButton.classList.toggle("hidden", state.view !== "week");
-  dayView.classList.toggle("hidden", state.view !== "day");
-  weekView.classList.toggle("hidden", state.view !== "week");
-  monthView.classList.toggle("hidden", state.view !== "month");
-  nowView.classList.toggle("hidden", state.view !== "now");
+  bulkAddPanel.classList.toggle("hidden", pageView !== "week");
+  jumpToDayButton.classList.toggle("hidden", pageView !== "week");
+  dayView.classList.toggle("hidden", pageView !== "day");
+  weekView.classList.toggle("hidden", pageView !== "week");
+  monthView.classList.toggle("hidden", pageView !== "month");
+  nowView.classList.toggle("hidden", pageView !== "now");
 }
 
 function renderDayView(activeDate) {
@@ -598,8 +596,7 @@ function renderMonthView(activeDate) {
     }
     cell.addEventListener("click", () => {
       state.currentDate = dateKey;
-      state.view = "day";
-      render();
+      navigateToView("day", dateKey);
     });
     grid.appendChild(cell);
   });
@@ -873,6 +870,29 @@ function formatDateKey(date) {
 function parseDateKey(dateKey) {
   const [year, month, day] = dateKey.split("-").map(Number);
   return new Date(year, month - 1, day);
+}
+
+function getPageView() {
+  const pathname = window.location.pathname.toLowerCase();
+  if (pathname.endsWith("/now.html")) return "now";
+  if (pathname.endsWith("/week.html")) return "week";
+  if (pathname.endsWith("/month.html")) return "month";
+  return "day";
+}
+
+function getQueryDate() {
+  const value = new URLSearchParams(window.location.search).get("date");
+  if (!value) return null;
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+}
+
+function getViewUrl(view, dateKey) {
+  const filename = view === "now" ? "now.html" : `${view}.html`;
+  return `/${filename}?date=${dateKey}`;
+}
+
+function navigateToView(view, dateKey) {
+  window.location.href = getViewUrl(view, dateKey);
 }
 
 function startOfDay(date) {

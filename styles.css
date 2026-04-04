@@ -94,7 +94,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .config-error { margin: 16px 0; padding: 12px 14px; border-radius: 12px; background: #fff4f4; color: #b42318; border: 1px solid #f3c9c9; }
 .auth-form { margin-top: 18px; }
 
-.app-shell { display: grid; grid-template-columns: 360px minmax(0,1fr); gap: 18px; min-height: calc(100vh - 36px); }
+.app-shell { display: grid; grid-template-columns: 320px minmax(0,1fr); gap: 18px; min-height: calc(100vh - 36px); }
 .sidebar { display: grid; gap: 16px; align-content: start; }
 .brand-card, .sidebar-card, .topbar { padding: 18px; }
 .brand-card { background: radial-gradient(circle at top right, var(--blue-soft), transparent 36%), var(--panel); }
@@ -105,13 +105,18 @@ h2 { font-size: 1.12rem; }
 .section-heading, .topbar, .topbar-actions, .nav-buttons, .view-switcher, .editor-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .section-heading, .topbar { justify-content: space-between; }
 .view-switcher, .nav-buttons { gap: 8px; }
+.topbar { align-items: flex-start; }
+.topbar-primary { display: grid; gap: 12px; }
+.top-view-nav { margin-top: 2px; }
 .theme-picker { display: grid; gap: 8px; margin-top: 14px; font-size: .9rem; font-weight: 600; }
+.topbar-theme { min-width: 180px; margin-top: 0; }
 .theme-picker select, .form-stack input, .form-stack select, .form-stack textarea {
   width: 100%; padding: 11px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface);
 }
 button { border: 0; border-radius: 12px; cursor: pointer; transition: transform .14s ease, background .14s ease; }
 button:hover { transform: translateY(-1px); }
 .switch-button, .ghost-button { padding: 10px 12px; background: var(--panel-soft); border: 1px solid var(--line); }
+.switch-button { text-decoration: none; color: inherit; }
 .switch-button.is-active, .primary-button { background: var(--blue); color: white; border-color: var(--blue); }
 .primary-button { padding: 12px 14px; font-weight: 700; }
 .oauth-button { width: 100%; background: var(--surface); }
@@ -202,6 +207,7 @@ button:hover { transform: translateY(-1px); }
 
 @media (max-width: 1120px) {
   .app-shell, .welcome-shell { grid-template-columns: 1fr; }
+  .topbar { display: grid; gap: 14px; }
 }
 
 @media (max-width: 760px) {
