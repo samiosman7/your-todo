@@ -513,8 +513,13 @@ function renderPanels() {
 
 function renderDayView(activeDate) {
   dayView.innerHTML = "";
+  const shell = document.createElement("section");
+  shell.className = "calendar-shell day-shell";
+  const hero = document.createElement("div");
+  hero.className = "calendar-hero";
+  hero.innerHTML = `<p class="eyebrow">Day Planner</p><h3>${activeDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</h3><p class="subtle">Drag blocks into the timeline and refine them with the editor.</p>`;
   const wrapper = document.createElement("div");
-  wrapper.className = "day-layout";
+  wrapper.className = "day-layout timeline-grid";
   const dateKey = formatDateKey(activeDate);
   for (let hour = 0; hour < 24; hour += 1) {
     const row = document.createElement("div");
@@ -532,12 +537,18 @@ function renderDayView(activeDate) {
     row.append(time, lane);
     wrapper.appendChild(row);
   }
-  dayView.appendChild(wrapper);
+  shell.append(hero, wrapper);
+  dayView.appendChild(shell);
 }
 
 function renderWeekView(activeDate) {
   weekView.innerHTML = "";
   const weekDates = getWeekDates(activeDate);
+  const shell = document.createElement("section");
+  shell.className = "calendar-shell week-shell";
+  const hero = document.createElement("div");
+  hero.className = "calendar-hero";
+  hero.innerHTML = `<p class="eyebrow">Week Planner</p><h3>${monthShortFormatter.format(weekDates[0])} to ${monthShortFormatter.format(weekDates[6])}</h3><p class="subtle">Pick a day from the strip or drag multi-hour blocks straight into the week.</p>`;
   const header = document.createElement("div");
   header.className = "week-header";
   header.appendChild(document.createElement("div"));
@@ -573,11 +584,17 @@ function renderWeekView(activeDate) {
       grid.appendChild(cell);
     });
   }
-  weekView.append(header, grid);
+  shell.append(hero, header, grid);
+  weekView.appendChild(shell);
 }
 function renderMonthView(activeDate) {
   monthView.innerHTML = "";
   const dates = getMonthGridDates(activeDate);
+  const shell = document.createElement("section");
+  shell.className = "calendar-shell month-shell";
+  const hero = document.createElement("div");
+  hero.className = "calendar-hero";
+  hero.innerHTML = `<p class="eyebrow">Month Planner</p><h3>${activeDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h3><p class="subtle">Scan the month at a glance, then open a day when you want detail.</p>`;
   const weekdays = document.createElement("div");
   weekdays.className = "month-weekdays";
   weekdayLabels.forEach((label) => {
@@ -619,7 +636,8 @@ function renderMonthView(activeDate) {
     });
     grid.appendChild(cell);
   });
-  monthView.append(weekdays, grid);
+  shell.append(hero, weekdays, grid);
+  monthView.appendChild(shell);
 }
 
 function renderNowView(activeDate) {
